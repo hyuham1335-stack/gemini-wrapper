@@ -1,4 +1,8 @@
+"use client";
+
 import type { MouseEvent } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { Conversation } from "./types";
 
 interface ConversationSidebarProps {
@@ -16,6 +20,9 @@ export function ConversationSidebar({
   onNewConversation,
   onDelete,
 }: ConversationSidebarProps) {
+  const pathname = usePathname();
+  const isBillingActive = pathname === "/billing";
+
   function handleDelete(e: MouseEvent, id: string) {
     e.stopPropagation();
     if (window.confirm("이 대화를 삭제할까요?")) {
@@ -102,6 +109,19 @@ export function ConversationSidebar({
           </ul>
         )}
       </nav>
+
+      <div className="border-t border-neutral-800 p-2">
+        <Link
+          href="/billing"
+          className={`block rounded-lg px-3 py-2 text-sm transition ${
+            isBillingActive
+              ? "bg-neutral-800 text-neutral-100"
+              : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+          }`}
+        >
+          청구 설정
+        </Link>
+      </div>
     </aside>
   );
 }

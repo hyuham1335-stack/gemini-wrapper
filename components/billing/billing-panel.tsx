@@ -106,6 +106,15 @@ export function BillingPanel({ subscription: initial }: BillingPanelProps) {
           </button>
         )}
 
+        {paid && (
+          <Link
+            href="/pricing"
+            className="rounded-full border border-neutral-700 px-4 py-2 text-center text-sm font-medium text-neutral-200 transition hover:border-neutral-500"
+          >
+            플랜 변경
+          </Link>
+        )}
+
         {paid && !subscription.cancelAtPeriodEnd && (
           <button
             type="button"

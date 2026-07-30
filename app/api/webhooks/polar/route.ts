@@ -98,12 +98,18 @@ async function markRevoked(supabase: ServiceClient, subscriptionId: string) {
 }
 
 export async function POST(request: Request) {
+  const webhookSecret = process.env.POLAR_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error("Polar webhook: POLAR_WEBHOOK_SECRET is not configured on this deployment");
+    return Response.json({ error: "Webhook not configured" }, { status: 500 });
+  }
+
   const rawBody = await request.text();
   const headers = Object.fromEntries(request.headers.entries());
 
   let event: Awaited<ReturnType<typeof validateEvent>>;
   try {
-    event = validateEvent(rawBody, headers, process.env.POLAR_WEBHOOK_SECRET ?? "");
+    event = validateEvent(rawBody, headers, webhookSecret);
   } catch (error) {
     if (error instanceof WebhookVerificationError) {
       return Response.json({ error: "Invalid signature" }, { status: 403 });

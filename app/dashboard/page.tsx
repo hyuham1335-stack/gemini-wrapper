@@ -6,9 +6,9 @@ import { useAuth } from "@/contexts/auth-context";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { ConversationSidebar } from "@/components/dashboard/conversation-sidebar";
 import { ChatPanel } from "@/components/dashboard/chat-panel";
+import { UsageBanner } from "@/components/dashboard/usage-banner";
+import { PaywallModal } from "@/components/dashboard/paywall-modal";
 import type { ChatMessage, Conversation } from "@/components/dashboard/types";
-
-const CREDITS_TOTAL = 5000;
 
 export default function DashboardPage() {
   const { user, isLoading, signOut } = useAuth();
@@ -16,8 +16,10 @@ export default function DashboardPage() {
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [creditsUsed, setCreditsUsed] = useState(1240);
+  const [usageUsed, setUsageUsed] = useState(0);
+  const [usageLimit, setUsageLimit] = useState<number | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const activeConversation =
     conversations.find((conversation) => conversation.id === activeConversationId) ?? null;
@@ -55,10 +57,24 @@ export default function DashboardPage() {
     }
 
     loadConversations();
+    loadUsage();
     return () => {
       cancelled = true;
     };
   }, [isLoading, user]);
+
+  async function loadUsage() {
+    try {
+      const response = await fetch("/api/usage");
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setUsageUsed(data.used ?? 0);
+      setUsageLimit(data.limit ?? null);
+    } catch (error) {
+      console.error("Failed to load usage", error);
+    }
+  }
 
   async function loadMessages(conversationId: string) {
     try {
@@ -174,7 +190,6 @@ export default function DashboardPage() {
       )
     );
 
-    setCreditsUsed((prev) => Math.min(prev + 10, CREDITS_TOTAL));
     setIsStreaming(true);
 
     try {
@@ -186,6 +201,19 @@ export default function DashboardPage() {
 
       if (!response.ok || !response.body) {
         const data = await response.json().catch(() => null);
+
+        if (response.status === 429 && data?.error === "limit_exceeded") {
+          setShowPaywall(true);
+          updateMessages((messages) =>
+            messages.map((message) =>
+              message.id === assistantMessageId
+                ? { ...message, content: "⚠️ 이번 달 사용 한도에 도달했습니다." }
+                : message
+            )
+          );
+          return;
+        }
+
         const errorText = data?.error ?? "응답을 가져오지 못했습니다.";
         updateMessages((messages) =>
           messages.map((message) =>
@@ -222,6 +250,7 @@ export default function DashboardPage() {
       );
     } finally {
       setIsStreaming(false);
+      loadUsage();
     }
   }
 
@@ -239,10 +268,11 @@ export default function DashboardPage() {
     <div className="flex h-dvh min-h-0 flex-1 flex-col">
       <DashboardHeader
         userLabel={userLabel}
-        creditsUsed={creditsUsed}
-        creditsTotal={CREDITS_TOTAL}
+        used={usageUsed}
+        limit={usageLimit}
         onSignOut={handleSignOut}
       />
+      <UsageBanner used={usageUsed} limit={usageLimit} />
       <div className="flex min-h-0 flex-1">
         <ConversationSidebar
           conversations={conversations}
@@ -257,6 +287,7 @@ export default function DashboardPage() {
           disabled={isStreaming}
         />
       </div>
+      {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { ApiError, type Content } from "@google/genai";
 import { GEMINI_MODEL, gemini } from "@/lib/gemini/client";
 import { requireUser } from "@/lib/supabase/require-user";
+import { createServiceClient } from "@/lib/supabase/service";
+import { PLAN_LIMITS } from "@/lib/polar/plans";
+import { currentUsageMonth, getUserSubscription } from "@/lib/polar/subscription";
 
 interface ChatRequestBody {
   conversationId?: string;
@@ -29,6 +32,29 @@ export async function POST(request: Request) {
 
   if (!process.env.GOOGLE_API_KEY) {
     return errorResponse("서버에 Gemini API 키가 설정되지 않았습니다.", 500);
+  }
+
+  const subscription = await getUserSubscription(supabase, user.id);
+  const limit = PLAN_LIMITS[subscription.plan];
+  if (limit !== null) {
+    const { data: usage, error: usageError } = await supabase
+      .from("usage")
+      .select("count")
+      .eq("user_id", user.id)
+      .eq("month", currentUsageMonth())
+      .maybeSingle();
+
+    if (usageError) {
+      console.error("Failed to load usage", usageError);
+      return errorResponse("사용량을 확인하지 못했습니다.", 500);
+    }
+
+    if ((usage?.count ?? 0) >= limit) {
+      return Response.json(
+        { error: "limit_exceeded", upgrade_url: "/pricing" },
+        { status: 429 }
+      );
+    }
   }
 
   const { data: conversation, error: conversationError } = await supabase
@@ -118,6 +144,14 @@ export async function POST(request: Request) {
             .insert({ conversation_id: conversationId, role: "assistant", content: fullText });
           if (insertAssistantError) {
             console.error("Failed to save assistant message", insertAssistantError);
+          }
+
+          const { error: usageIncrementError } = await createServiceClient().rpc(
+            "increment_usage",
+            { p_user_id: user.id }
+          );
+          if (usageIncrementError) {
+            console.error("Failed to increment usage", usageIncrementError);
           }
         }
       } catch (error) {

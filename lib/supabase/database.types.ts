@@ -67,12 +67,90 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          plan: string
+          polar_customer_id: string | null
+          polar_subscription_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          plan?: string
+          polar_customer_id?: string | null
+          polar_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          plan?: string
+          polar_customer_id?: string | null
+          polar_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usage: {
+        Row: {
+          count: number
+          month: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          count?: number
+          month: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          count?: number
+          month?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          event_type: string
+          id: string
+          payload: Json
+          received_at: string
+        }
+        Insert: {
+          event_type: string
+          id: string
+          payload: Json
+          received_at?: string
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          payload?: Json
+          received_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_usage: { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

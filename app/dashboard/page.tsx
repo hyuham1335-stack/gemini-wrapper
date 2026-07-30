@@ -9,7 +9,7 @@ export default function DashboardPage() {
 
   async function handleSignOut() {
     await signOut();
-    router.push("/login");
+    router.push("/");
   }
 
   if (isLoading) {

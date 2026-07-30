@@ -10,6 +10,7 @@ interface ActiveSubscriptionData {
   id: string;
   customerId: string;
   productId: string;
+  status: string;
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: Date;
   metadata: Record<string, unknown>;
@@ -38,7 +39,25 @@ async function syncActiveSubscription(supabase: ServiceClient, subscription: Act
     return;
   }
 
-  const plan = planFromProductId(subscription.productId) ?? "free";
+  // Payment hasn't cleared yet - don't grant the paid plan prematurely.
+  // A later subscription.active/updated event will re-sync once it does.
+  if (subscription.status === "incomplete" || subscription.status === "incomplete_expired") {
+    console.error("Polar webhook: subscription payment not complete, skipping plan sync", {
+      subscriptionId: subscription.id,
+      status: subscription.status,
+    });
+    return;
+  }
+
+  const plan = planFromProductId(subscription.productId);
+  if (!plan) {
+    console.error("Polar webhook: unrecognized product id, skipping plan sync", {
+      subscriptionId: subscription.id,
+      productId: subscription.productId,
+    });
+    return;
+  }
+
   const { error } = await supabase.from("subscriptions").upsert(
     {
       user_id: userId,

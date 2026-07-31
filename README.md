@@ -2,11 +2,8 @@
 
 Google Gemini API를 감싼 구독형 SaaS입니다. Google 로그인 후 대시보드에서 Gemini와 실시간 스트리밍으로 대화할 수 있고, 대화 내용은 서버에서 암호화되어 저장됩니다. 플랜(Free / Pro / Unlimited)에 따라 월간 사용량이 제한되며, 유료 전환은 Polar 결제로 처리됩니다.
 
-## ⚠️ 이 프로젝트의 Next.js는 학습 데이터와 다를 수 있습니다
 
-`AGENTS.md`에 명시된 대로, 이 프로젝트는 Next.js `16.2.12`를 사용하며 이전 버전과 다른 breaking change가 포함되어 있습니다. 대표적으로 `middleware.ts` 대신 **`proxy.ts`** 컨벤션을 사용합니다(`lib/supabase/proxy.ts`의 `updateSession()`을 호출). 코드를 수정하기 전에 `node_modules/next/dist/docs/`의 최신 문서를 확인하세요.
-
-## 기술 스택
+## 1. 기술 스택
 
 | 영역 | 사용 기술 |
 | --- | --- |
@@ -17,7 +14,7 @@ Google Gemini API를 감싼 구독형 SaaS입니다. Google 로그인 후 대시
 | 결제 | Polar (`@polar-sh/sdk`) |
 | 암호화 | Node.js `crypto` 내장 모듈 기반 AES-256-GCM + HMAC-SHA256 |
 
-## 주요 기능
+## 2. 주요 기능
 
 - **Google OAuth 로그인**: Supabase Auth로 로그인하고, `proxy.ts`가 `/dashboard`, `/billing` 라우트를 보호합니다.
 - **Gemini 스트리밍 채팅**: `app/api/chat/route.ts`에서 `generateContentStream`으로 응답을 스트리밍합니다.
@@ -25,7 +22,7 @@ Google Gemini API를 감싼 구독형 SaaS입니다. Google 로그인 후 대시
 - **플랜별 사용량 제한**: Free(10회/월), Pro(100회/월), Unlimited(무제한)로 월간 호출 횟수를 제한하고, 초과 시 페이월(`PaywallModal`)이 표시됩니다.
 - **Polar 구독 결제**: 체크아웃, 고객 포탈, 플랜 변경/취소, 웹훅(서명 검증 + idempotent 처리)까지 포함합니다.
 
-## 디렉터리 구조
+## 3. 디렉터리 구조
 
 ```
 app/
@@ -55,7 +52,7 @@ scripts/                            # 키 생성 / 암호화 마이그레이션 
 proxy.ts                            # 라우트 보호 (구 middleware.ts)
 ```
 
-## 로컬 개발 시작하기
+## 4. 로컬 개발 시작하기
 
 ```bash
 # 1. 의존성 설치
@@ -75,7 +72,7 @@ npm run dev
 
 종료는 `Ctrl + C`, Node 프로세스가 남아있으면 `Get-Process node`로 확인 후 `taskkill /IM node.exe /F`로 종료합니다.
 
-## 환경 변수
+## 5. 환경 변수
 
 `.env.local`에 아래 값을 설정해야 합니다 (저장소에 `.env.example`은 없으므로 아래 표를 템플릿으로 사용하세요).
 
@@ -93,7 +90,7 @@ npm run dev
 | `POLAR_PRODUCT_ID_UNLIMITED` | Unlimited 플랜 Polar Product ID |
 | `POLAR_WEBHOOK_SECRET` | Polar 웹훅 서명 검증 시크릿 (배포 후 발급) |
 
-## 데이터베이스 스키마 개요
+## 6. 데이터베이스 스키마 개요
 
 `supabase/migrations/`에 정의되어 있으며, 모든 테이블에 Row Level Security(RLS)가 적용되어 있습니다.
 
@@ -106,7 +103,7 @@ npm run dev
 | `usage` | 사용자별 월간 사용 횟수 |
 | `webhook_events` | Polar 웹훅 이벤트 로그 (idempotency 보장용, service-role 전용) |
 
-## 사용 가능한 스크립트
+## 7. 사용 가능한 스크립트
 
 | 명령어 | 설명 |
 | --- | --- |
@@ -118,7 +115,7 @@ npm run dev
 | `npm run db:migrate-encrypt` | 기존 데이터 암호화 마이그레이션 |
 | `npm run db:backfill-chat-encryption` | 대화/메시지 암호화 백필 |
 
-## 배포 (Vercel)
+## 8. 배포 (Vercel)
 
 1. GitHub에 Push
 2. Vercel에서 프로젝트 배포
@@ -130,7 +127,7 @@ npm run dev
 
 웹훅을 사용하는 경우 배포 후 실제 결제 흐름으로 반드시 테스트합니다.
 
-### OAuth 오류(`redirect_uri_mismatch`) 발생 시 확인 순서
+### 9. OAuth 오류(`redirect_uri_mismatch`) 발생 시 확인 순서
 
 1. Supabase Site URL이 실제 배포 주소와 일치하는지
 2. Google OAuth 승인된 Redirect URI가 정확한지, 게시 상태가 Production인지

@@ -67,6 +67,36 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          created_at: string
+          email_encrypted: string | null
+          email_hash: string | null
+          full_name_encrypted: string | null
+          full_name_hash: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_encrypted?: string | null
+          email_hash?: string | null
+          full_name_encrypted?: string | null
+          full_name_hash?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_encrypted?: string | null
+          email_hash?: string | null
+          full_name_encrypted?: string | null
+          full_name_hash?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           cancel_at_period_end: boolean
@@ -120,6 +150,30 @@ export type Database = {
           count?: number
           month?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          ip_address_encrypted: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          ip_address_encrypted?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_address_encrypted?: string | null
           user_id?: string
         }
         Relationships: []

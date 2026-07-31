@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate-keys": "tsx scripts/generate-keys.ts",
+    "db:migrate-encrypt": "tsx scripts/migrate-encrypt.ts"
   },
   "dependencies": {
     "@google/genai": "^2.14.0",
@@ -25,6 +27,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

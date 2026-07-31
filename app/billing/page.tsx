@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserSubscription } from "@/lib/polar/subscription";
 import { BillingPanel } from "@/components/billing/billing-panel";
+import { BackToDashboardLink } from "@/components/back-to-dashboard-link";
 
 export default async function BillingPage() {
   const supabase = await createClient();
@@ -13,7 +14,8 @@ export default async function BillingPage() {
   const subscription = await getUserSubscription(supabase, user.id);
 
   return (
-    <section className="flex flex-1 flex-col items-center gap-8 px-4 py-24">
+    <section className="relative flex flex-1 flex-col items-center gap-8 px-4 py-24">
+      <BackToDashboardLink />
       <div className="flex flex-col items-center gap-4 text-center">
         <span className="text-sm font-medium tracking-wide text-neutral-500 uppercase">
           청구 설정

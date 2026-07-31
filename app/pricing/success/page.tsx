@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PLAN_LABELS, type Plan } from "@/lib/polar/plans";
+import { BackToDashboardLink } from "@/components/back-to-dashboard-link";
 
 const POLL_INTERVAL_MS = 1500;
 const MAX_ATTEMPTS = 7;
@@ -47,7 +48,8 @@ export default function PricingSuccessPage() {
   }, []);
 
   return (
-    <section className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
+    <section className="relative flex flex-1 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
+      <BackToDashboardLink />
       <span className="text-sm font-medium tracking-wide text-neutral-500 uppercase">
         Gemini Wrapper
       </span>

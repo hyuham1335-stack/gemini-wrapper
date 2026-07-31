@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getUserSubscription } from "@/lib/polar/subscription";
 import { PricingPlans } from "@/components/pricing/pricing-plans";
+import { BackToDashboardLink } from "@/components/back-to-dashboard-link";
 
 export default async function PricingPage() {
   const supabase = await createClient();
@@ -11,7 +12,8 @@ export default async function PricingPage() {
   const subscription = user ? await getUserSubscription(supabase, user.id) : null;
 
   return (
-    <section className="flex flex-1 flex-col items-center gap-12 px-4 py-24">
+    <section className="relative flex flex-1 flex-col items-center gap-12 px-4 py-24">
+      {user && <BackToDashboardLink />}
       <div className="flex flex-col items-center gap-4 text-center">
         <span className="text-sm font-medium tracking-wide text-neutral-500 uppercase">
           요금제

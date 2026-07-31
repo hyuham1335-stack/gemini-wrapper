@@ -32,11 +32,6 @@ const TABLES: TableConfig[] = [
       { encryptedCol: "full_name_encrypted", hashCol: "full_name_hash" },
     ],
   },
-  {
-    table: "user_activity_logs",
-    primaryKey: "id",
-    fields: [{ encryptedCol: "ip_address_encrypted", hashCol: null }],
-  },
 ];
 
 interface Counters {

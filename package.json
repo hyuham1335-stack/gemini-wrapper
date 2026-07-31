@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:generate-keys": "tsx scripts/generate-keys.ts",
-    "db:migrate-encrypt": "tsx scripts/migrate-encrypt.ts"
+    "db:generate-keys": "tsx --env-file=.env.local scripts/generate-keys.ts",
+    "db:migrate-encrypt": "tsx --env-file=.env.local scripts/migrate-encrypt.ts",
+    "db:backfill-chat-encryption": "tsx --env-file=.env.local scripts/backfill-conversation-encryption.ts"
   },
   "dependencies": {
     "@google/genai": "^2.14.0",

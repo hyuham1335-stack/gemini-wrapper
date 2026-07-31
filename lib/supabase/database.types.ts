@@ -18,40 +18,40 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          title: string
+          title_encrypted: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          title?: string
+          title_encrypted: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          title?: string
+          title_encrypted?: string
           user_id?: string
         }
         Relationships: []
       }
       messages: {
         Row: {
-          content: string
+          content_encrypted: string
           conversation_id: string
           created_at: string
           id: string
           role: string
         }
         Insert: {
-          content: string
+          content_encrypted: string
           conversation_id: string
           created_at?: string
           id?: string
           role: string
         }
         Update: {
-          content?: string
+          content_encrypted?: string
           conversation_id?: string
           created_at?: string
           id?: string
@@ -150,30 +150,6 @@ export type Database = {
           count?: number
           month?: string
           updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_activity_logs: {
-        Row: {
-          created_at: string
-          event_type: string
-          id: string
-          ip_address_encrypted: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          event_type: string
-          id?: string
-          ip_address_encrypted?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          event_type?: string
-          id?: string
-          ip_address_encrypted?: string | null
           user_id?: string
         }
         Relationships: []

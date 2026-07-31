@@ -2,6 +2,7 @@ import { ApiError, type Content } from "@google/genai";
 import { GEMINI_MODEL, gemini } from "@/lib/gemini/client";
 import { requireUser } from "@/lib/supabase/require-user";
 import { createServiceClient } from "@/lib/supabase/service";
+import { decrypt, encrypt } from "@/lib/encryption";
 import { PLAN_LIMITS } from "@/lib/polar/plans";
 import { currentUsageMonth, getUserSubscription } from "@/lib/polar/subscription";
 
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
 
   const { data: history, error: historyError } = await supabase
     .from("messages")
-    .select("role, content")
+    .select("role, content_encrypted")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
 
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
 
   const { error: insertUserError } = await supabase
     .from("messages")
-    .insert({ conversation_id: conversationId, role: "user", content });
+    .insert({ conversation_id: conversationId, role: "user", content_encrypted: encrypt(content) });
 
   if (insertUserError) {
     console.error("Failed to save user message", insertUserError);
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
   if (isFirstMessage) {
     const { error: titleError } = await supabase
       .from("conversations")
-      .update({ title: content.slice(0, 24) })
+      .update({ title_encrypted: encrypt(content.slice(0, 24)) })
       .eq("id", conversationId);
     if (titleError) {
       console.error("Failed to update conversation title", titleError);
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
   const contents: Content[] = [
     ...history.map((message) => ({
       role: message.role === "assistant" ? "model" : "user",
-      parts: [{ text: message.content }],
+      parts: [{ text: decrypt(message.content_encrypted) }],
     })),
     { role: "user", parts: [{ text: content }] },
   ];
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
         if (fullText) {
           const { error: insertAssistantError } = await supabase
             .from("messages")
-            .insert({ conversation_id: conversationId, role: "assistant", content: fullText });
+            .insert({ conversation_id: conversationId, role: "assistant", content_encrypted: encrypt(fullText) });
           if (insertAssistantError) {
             console.error("Failed to save assistant message", insertAssistantError);
           }

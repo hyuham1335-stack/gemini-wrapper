@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/supabase/require-user";
+import { decrypt } from "@/lib/encryption";
 
 function errorResponse(message: string, status: number) {
   return Response.json({ error: message }, { status });
@@ -15,7 +16,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("messages")
-    .select("id, role, content")
+    .select("id, role, content_encrypted")
     .eq("conversation_id", id)
     .order("created_at", { ascending: true });
 
@@ -24,5 +25,11 @@ export async function GET(
     return errorResponse("메시지를 불러오지 못했습니다.", 500);
   }
 
-  return Response.json({ messages: data });
+  const messages = data.map(({ id, role, content_encrypted }) => ({
+    id,
+    role,
+    content: decrypt(content_encrypted),
+  }));
+
+  return Response.json({ messages });
 }

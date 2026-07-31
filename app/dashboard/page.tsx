@@ -25,6 +25,12 @@ export default function DashboardPage() {
     conversations.find((conversation) => conversation.id === activeConversationId) ?? null;
 
   useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace("/login");
+    }
+  }, [isLoading, user, router]);
+
+  useEffect(() => {
     if (isLoading || !user) return;
 
     let cancelled = false;
@@ -105,6 +111,7 @@ export default function DashboardPage() {
   async function handleSignOut() {
     await signOut();
     router.push("/");
+    router.refresh();
   }
 
   function handleSelectConversation(id: string) {
@@ -254,7 +261,7 @@ export default function DashboardPage() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
       <section className="flex flex-1 items-center justify-center px-4 py-24">
         <p className="text-neutral-500">불러오는 중...</p>

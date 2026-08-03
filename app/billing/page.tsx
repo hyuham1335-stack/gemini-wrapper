@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUserSubscription } from "@/lib/polar/subscription";
+import { getUserSubscription, currentUsageMonth } from "@/lib/polar/subscription";
+import { PLAN_LIMITS } from "@/lib/polar/plans";
 import { BillingPanel } from "@/components/billing/billing-panel";
 import { BackToDashboardLink } from "@/components/back-to-dashboard-link";
 
@@ -12,6 +13,18 @@ export default async function BillingPage() {
   if (!user) redirect("/login?redirectedFrom=/billing");
 
   const subscription = await getUserSubscription(supabase, user.id);
+
+  const { data: usageRow } = await supabase
+    .from("usage")
+    .select("count")
+    .eq("user_id", user.id)
+    .eq("month", currentUsageMonth())
+    .maybeSingle();
+
+  const usage = {
+    used: usageRow?.count ?? 0,
+    limit: PLAN_LIMITS[subscription.plan],
+  };
 
   return (
     <section className="relative flex flex-1 flex-col items-center gap-8 px-4 py-24">
@@ -25,7 +38,7 @@ export default async function BillingPage() {
         </h1>
       </div>
 
-      <BillingPanel subscription={subscription} />
+      <BillingPanel subscription={subscription} usage={usage} />
     </section>
   );
 }

@@ -7,6 +7,41 @@ import type { UserSubscription } from "@/lib/polar/subscription";
 
 interface BillingPanelProps {
   subscription: UserSubscription;
+  usage: {
+    used: number;
+    limit: number | null;
+  };
+}
+
+function UsageMeter({ used, limit }: { used: number; limit: number | null }) {
+  if (limit === null) {
+    return (
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-neutral-400">이번 달 사용량</span>
+        <span className="text-sm text-neutral-200">무제한</span>
+      </div>
+    );
+  }
+
+  const ratio = limit === 0 ? 1 : Math.min(used / limit, 1);
+  const isWarning = ratio >= 0.8;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-neutral-400">이번 달 사용량</span>
+        <span className={`text-sm ${isWarning ? "text-amber-400" : "text-neutral-200"}`}>
+          {used.toLocaleString()} / {limit.toLocaleString()}회
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+        <div
+          className={`h-full rounded-full ${isWarning ? "bg-amber-400" : "bg-white"}`}
+          style={{ width: `${ratio * 100}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function formatDate(iso: string | null) {
@@ -18,7 +53,7 @@ function formatDate(iso: string | null) {
   });
 }
 
-export function BillingPanel({ subscription: initial }: BillingPanelProps) {
+export function BillingPanel({ subscription: initial, usage }: BillingPanelProps) {
   const [subscription, setSubscription] = useState(initial);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +113,8 @@ export function BillingPanel({ subscription: initial }: BillingPanelProps) {
         <span className="text-sm text-neutral-400">현재 플랜</span>
         <span className="text-lg font-semibold text-white">{PLAN_LABELS[subscription.plan]}</span>
       </div>
+
+      <UsageMeter used={usage.used} limit={usage.limit} />
 
       {paid && subscription.currentPeriodEnd && (
         <div className="flex items-center justify-between">

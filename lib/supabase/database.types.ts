@@ -180,7 +180,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      increment_usage: { Args: { p_user_id: string }; Returns: number }
+      try_increment_usage: {
+        Args: { p_user_id: string; p_limit: number | null }
+        Returns: number | null
+      }
+      release_usage: { Args: { p_user_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

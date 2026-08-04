@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/supabase/require-user";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decrypt, encrypt } from "@/lib/encryption";
 import { PLAN_LIMITS } from "@/lib/polar/plans";
-import { currentUsageMonth, getUserSubscription } from "@/lib/polar/subscription";
+import { getUserSubscription } from "@/lib/polar/subscription";
 
 interface ChatRequestBody {
   conversationId?: string;
@@ -37,26 +37,33 @@ export async function POST(request: Request) {
 
   const subscription = await getUserSubscription(supabase, user.id);
   const limit = PLAN_LIMITS[subscription.plan];
-  if (limit !== null) {
-    const { data: usage, error: usageError } = await supabase
-      .from("usage")
-      .select("count")
-      .eq("user_id", user.id)
-      .eq("month", currentUsageMonth())
-      .maybeSingle();
 
-    if (usageError) {
-      console.error("Failed to load usage", usageError);
-      return errorResponse("사용량을 확인하지 못했습니다.", 500);
-    }
+  // Reserves the slot atomically (increment + limit check in one statement) so concurrent
+  // requests can't all read the same pre-increment count and race past the monthly limit.
+  const serviceClient = createServiceClient();
+  const { data: reservedCount, error: reserveError } = await serviceClient.rpc(
+    "try_increment_usage",
+    { p_user_id: user.id, p_limit: limit }
+  );
 
-    if ((usage?.count ?? 0) >= limit) {
-      return Response.json(
-        { error: "limit_exceeded", upgrade_url: "/pricing" },
-        { status: 429 }
-      );
-    }
+  if (reserveError) {
+    console.error("Failed to reserve usage slot", reserveError);
+    return errorResponse("사용량을 확인하지 못했습니다.", 500);
   }
+  if (reservedCount === null) {
+    return Response.json(
+      { error: "limit_exceeded", upgrade_url: "/pricing" },
+      { status: 429 }
+    );
+  }
+
+  let usageReserved = true;
+  const releaseUsage = async () => {
+    if (!usageReserved) return;
+    usageReserved = false;
+    const { error } = await serviceClient.rpc("release_usage", { p_user_id: user.id });
+    if (error) console.error("Failed to release usage reservation", error);
+  };
 
   const { data: conversation, error: conversationError } = await supabase
     .from("conversations")
@@ -66,9 +73,11 @@ export async function POST(request: Request) {
 
   if (conversationError) {
     console.error("Failed to load conversation", conversationError);
+    await releaseUsage();
     return errorResponse("대화 정보를 불러오지 못했습니다.", 500);
   }
   if (!conversation) {
+    await releaseUsage();
     return errorResponse("대화를 찾을 수 없습니다.", 404);
   }
 
@@ -80,6 +89,7 @@ export async function POST(request: Request) {
 
   if (historyError) {
     console.error("Failed to load message history", historyError);
+    await releaseUsage();
     return errorResponse("대화 기록을 불러오지 못했습니다.", 500);
   }
 
@@ -91,6 +101,7 @@ export async function POST(request: Request) {
 
   if (insertUserError) {
     console.error("Failed to save user message", insertUserError);
+    await releaseUsage();
     return errorResponse("메시지를 저장하지 못했습니다.", 500);
   }
 
@@ -119,6 +130,7 @@ export async function POST(request: Request) {
       contents,
     });
   } catch (error) {
+    await releaseUsage();
     if (error instanceof ApiError) {
       return errorResponse(error.message, error.status);
     }
@@ -146,17 +158,13 @@ export async function POST(request: Request) {
           if (insertAssistantError) {
             console.error("Failed to save assistant message", insertAssistantError);
           }
-
-          const { error: usageIncrementError } = await createServiceClient().rpc(
-            "increment_usage",
-            { p_user_id: user.id }
-          );
-          if (usageIncrementError) {
-            console.error("Failed to increment usage", usageIncrementError);
-          }
+        } else {
+          // No billable output was produced (e.g. stream closed empty); give the slot back.
+          await releaseUsage();
         }
       } catch (error) {
         console.error("Gemini stream interrupted", error);
+        await releaseUsage();
         controller.error(error);
       }
     },

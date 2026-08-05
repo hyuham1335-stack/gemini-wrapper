@@ -7,6 +7,7 @@ import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { ConversationSidebar } from "@/components/dashboard/conversation-sidebar";
 import { ChatPanel } from "@/components/dashboard/chat-panel";
 import { UsageBanner } from "@/components/dashboard/usage-banner";
+import { CancellationBanner } from "@/components/dashboard/cancellation-banner";
 import { PaywallModal } from "@/components/dashboard/paywall-modal";
 import type { ChatMessage, Conversation } from "@/components/dashboard/types";
 
@@ -20,6 +21,8 @@ export default function DashboardPage() {
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
 
   const activeConversation =
     conversations.find((conversation) => conversation.id === activeConversationId) ?? null;
@@ -64,6 +67,7 @@ export default function DashboardPage() {
 
     loadConversations();
     loadUsage();
+    loadSubscription();
     return () => {
       cancelled = true;
     };
@@ -79,6 +83,19 @@ export default function DashboardPage() {
       setUsageLimit(data.limit ?? null);
     } catch (error) {
       console.error("Failed to load usage", error);
+    }
+  }
+
+  async function loadSubscription() {
+    try {
+      const response = await fetch("/api/subscription");
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setCancelAtPeriodEnd(data.subscription?.cancelAtPeriodEnd ?? false);
+      setCurrentPeriodEnd(data.subscription?.currentPeriodEnd ?? null);
+    } catch (error) {
+      console.error("Failed to load subscription", error);
     }
   }
 
@@ -278,6 +295,10 @@ export default function DashboardPage() {
         used={usageUsed}
         limit={usageLimit}
         onSignOut={handleSignOut}
+      />
+      <CancellationBanner
+        cancelAtPeriodEnd={cancelAtPeriodEnd}
+        currentPeriodEnd={currentPeriodEnd}
       />
       <UsageBanner used={usageUsed} limit={usageLimit} />
       <div className="flex min-h-0 flex-1">

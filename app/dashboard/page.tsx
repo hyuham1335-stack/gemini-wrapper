@@ -9,6 +9,7 @@ import { ChatPanel } from "@/components/dashboard/chat-panel";
 import { UsageBanner } from "@/components/dashboard/usage-banner";
 import { CancellationBanner } from "@/components/dashboard/cancellation-banner";
 import { PaywallModal } from "@/components/dashboard/paywall-modal";
+import { SearchModal } from "@/components/dashboard/search-modal";
 import type { ChatMessage, Conversation } from "@/components/dashboard/types";
 
 export default function DashboardPage() {
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
 
@@ -295,6 +297,7 @@ export default function DashboardPage() {
         used={usageUsed}
         limit={usageLimit}
         onSignOut={handleSignOut}
+        onOpenSearch={() => setShowSearch(true)}
       />
       <CancellationBanner
         cancelAtPeriodEnd={cancelAtPeriodEnd}
@@ -316,6 +319,12 @@ export default function DashboardPage() {
         />
       </div>
       {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
+      {showSearch && (
+        <SearchModal
+          onClose={() => setShowSearch(false)}
+          onSelectConversation={handleSelectConversation}
+        />
+      )}
     </div>
   );
 }

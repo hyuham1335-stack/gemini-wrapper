@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { PLAN_LABELS, isPaidPlan } from "@/lib/polar/plans";
 import type { UserSubscription } from "@/lib/polar/subscription";
+import { formatDate } from "@/lib/format";
 
 interface BillingPanelProps {
   subscription: UserSubscription;
@@ -42,15 +43,6 @@ function UsageMeter({ used, limit }: { used: number; limit: number | null }) {
       </div>
     </div>
   );
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return null;
-  return new Date(iso).toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 }
 
 export function BillingPanel({ subscription: initial, usage }: BillingPanelProps) {

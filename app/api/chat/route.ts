@@ -1,6 +1,7 @@
 import { ApiError, type Content } from "@google/genai";
 import { GEMINI_MODEL, gemini } from "@/lib/gemini/client";
 import { requireUser } from "@/lib/supabase/require-user";
+import { errorResponse } from "@/lib/api/error-response";
 import { createServiceClient } from "@/lib/supabase/service";
 import { decrypt, encrypt } from "@/lib/encryption";
 import { PLAN_LIMITS } from "@/lib/polar/plans";
@@ -9,10 +10,6 @@ import { getUserSubscription } from "@/lib/polar/subscription";
 interface ChatRequestBody {
   conversationId?: string;
   content?: string;
-}
-
-function errorResponse(message: string, status: number) {
-  return Response.json({ error: message }, { status });
 }
 
 export async function POST(request: Request) {

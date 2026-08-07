@@ -1,10 +1,7 @@
 import { requireUser } from "@/lib/supabase/require-user";
+import { errorResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
 import { getUserSubscription } from "@/lib/polar/subscription";
-
-function errorResponse(message: string, status: number) {
-  return Response.json({ error: message }, { status });
-}
 
 export async function POST() {
   const { supabase, user } = await requireUser();

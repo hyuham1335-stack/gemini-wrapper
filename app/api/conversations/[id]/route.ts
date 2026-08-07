@@ -1,8 +1,5 @@
 import { requireUser } from "@/lib/supabase/require-user";
-
-function errorResponse(message: string, status: number) {
-  return Response.json({ error: message }, { status });
-}
+import { errorResponse } from "@/lib/api/error-response";
 
 export async function DELETE(_request: Request, ctx: RouteContext<"/api/conversations/[id]">) {
   const { supabase, user } = await requireUser();

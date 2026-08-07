@@ -1,16 +1,9 @@
 import Link from "next/link";
+import { formatDate } from "@/lib/format";
 
 interface CancellationBannerProps {
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 }
 
 export function CancellationBanner({

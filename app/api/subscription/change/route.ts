@@ -1,14 +1,11 @@
 import { requireUser } from "@/lib/supabase/require-user";
+import { errorResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
 import { PLAN_PRODUCT_IDS } from "@/lib/polar/plans";
 import { getUserSubscription } from "@/lib/polar/subscription";
 
 interface ChangeRequestBody {
   plan?: string;
-}
-
-function errorResponse(message: string, status: number) {
-  return Response.json({ error: message }, { status });
 }
 
 export async function PATCH(request: Request) {

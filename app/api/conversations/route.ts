@@ -1,9 +1,6 @@
 import { requireUser } from "@/lib/supabase/require-user";
+import { errorResponse } from "@/lib/api/error-response";
 import { decrypt, encrypt } from "@/lib/encryption";
-
-function errorResponse(message: string, status: number) {
-  return Response.json({ error: message }, { status });
-}
 
 export async function GET() {
   const { supabase, user } = await requireUser();

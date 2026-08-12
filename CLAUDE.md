@@ -88,6 +88,16 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
   MCP 도구 또는 CLI를 통해 적용합니다 — 별도 마이그레이션 러너/ORM 없음.
 - 종료 후 Node 프로세스가 남으면 `Get-Process node` 확인 → `taskkill /IM node.exe /F`.
 
+## 워크플로 트리거 (Workflow Triggers)
+
+- **"배포" / "배포해줘" / "ship" / "ship it"** → 커밋 후 푸쉬 요청입니다.
+  `.claude/commands/ship.md`(`/ship`)의 흐름을 그대로 따르세요:
+  `git status`/`git diff` 확인 → `npm run lint` → `npm run build` → 변경 파일만 스테이징 →
+  영어 커밋 메시지 작성 → 현재 브랜치를 `origin`에 푸쉬.
+- lint/build는 **항상** 돌립니다. 실패하면 원인을 고치고 재실행하며, 3회 시도 후에도 실패하면
+  커밋하지 말고 실패 내용을 보고하세요. `--no-verify`나 force push는 사용하지 않습니다.
+- 시크릿 파일(`.env*`, `*.pem` 등)이 변경 목록에 보이면 커밋하지 말고 즉시 보고하세요 (절대 규칙 참고).
+
 ## 도메인 컨텍스트 (Domain Context)
 
 - **Plan**: `free`(월 10회) / `pro`(월 100회) / `unlimited`(무제한) — `lib/polar/plans.ts`의

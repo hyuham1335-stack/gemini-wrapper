@@ -7,8 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Gemini Wrapper is a subscription SaaS wrapper around the Google Gemini API: Google OAuth login
 (Supabase Auth), a chat dashboard that streams Gemini responses, server-side encrypted conversation
 storage, and plan-based (Free/Pro/Unlimited) monthly usage limits with Polar for paid upgrades.
-`README.md` has the full env var table, DB schema table, and deployment steps — read it before
-structural changes.
+
+## 문서 지도 (Where to look)
+
+| 문서 | 내용 | 언제 읽나 |
+| --- | --- | --- |
+| `docs/PRD.md` | 제품 요구사항 — 타깃 사용자, 기능 요구사항 ID(A-/C-/U-/B-), 플랜 정책, 범위 외 항목 | 기능을 추가·변경·삭제하기 전 (요구된 동작이 맞는지 확인) |
+| `docs/TRD.md` | 기술 요구사항 — API 명세, 데이터 모델, 사용량 예약/해제 설계, 암호화·웹훅 설계, 기술 부채 | 코드를 건드리기 전 (구현 계약 확인) |
+| `README.md` | 환경 변수 표, DB 스키마 요약, 로컬 셋업, Vercel 배포 절차 | 셋업·배포·환경 변수 작업 시 |
+| `AGENTS.md` | Next.js 16 버전 경고 | 항상 |
+
+**문서 동기화 규칙**: 사용자에게 보이는 동작을 바꾸면 `docs/PRD.md`의 해당 요구사항 표를,
+API·스키마·플랜 한도·보안 설계를 바꾸면 `docs/TRD.md`의 해당 절을 같은 커밋에서 함께 갱신하세요.
+아직 구현되지 않은 항목을 PRD에 "구현됨"으로 표시하지 마세요.
 
 ## 절대 규칙 (Critical Rules)
 
@@ -38,6 +49,7 @@ app/
   api/
     chat/route.ts                                      # Gemini 스트리밍 채팅
     conversations/...                                  # 대화 목록/생성/삭제/메시지
+    search/route.ts                                     # 메시지 전문 검색 (서버 복호화 후 필터)
     usage/route.ts                                      # 이번 달 사용량
     checkout/route.ts, billing/portal/route.ts          # Polar 체크아웃/포탈
     subscription/...                                    # 구독 조회/변경/취소
@@ -45,7 +57,7 @@ app/
 components/                                              # 채팅/청구/가격 UI
 contexts/auth-context.tsx                                # 전역 Supabase 인증 상태
 lib/
-  supabase/{client,server,service,proxy,require-user}.ts # Supabase 클라이언트 4종
+  supabase/{client,server,service,proxy,require-user}.ts # Supabase 클라이언트 4종 + database.types.ts
   gemini/client.ts                                        # Gemini SDK 인스턴스
   polar/{client,plans,subscription}.ts                    # 결제/플랜 로직
   encryption.ts                                            # AES-256-GCM + HMAC 조회 해시
@@ -103,8 +115,10 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
 - **Plan**: `free`(월 10회) / `pro`(월 100회) / `unlimited`(무제한) — `lib/polar/plans.ts`의
   `PLAN_LIMITS`가 단일 진실 공급원(source of truth). `planFromProductId()`가 Polar product ID를
   플랜으로 매핑.
-- **Subscription**: `subscriptions` 테이블에 행이 없으면 신규 유저는 암묵적으로 free 플랜
-  (`lib/polar/subscription.ts`의 `DEFAULT_FREE_SUBSCRIPTION`) — 결제 전에는 행이 생성되지 않음.
+- **Subscription**: 가입 시 `auth.users` 트리거(`on_auth_user_created_subscription`)가 free 구독 행을
+  자동 생성. `lib/polar/subscription.ts`의 `DEFAULT_FREE_SUBSCRIPTION`은 행이 없을 때를 위한 폴백.
+  구독의 단일 진실 공급원은 Polar — 플랜 변경/해지는 DB를 직접 쓰지 않고 Polar SDK 호출 후
+  웹훅으로 되받아 반영. `revoked` 시 플랜은 `free`로 되돌아감(대화 기록은 유지).
 - **Usage**: 사용자별 월간 호출 횟수. 체크-후-증가(check-then-increment) 방식이 아니라
   reserve/release RPC(`try_increment_usage` / `release_usage`)로 원자적 처리 — 동시 요청 레이스로
   한도를 우회하는 것을 방지 (절대 규칙 참고).
@@ -116,8 +130,15 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
   저장 (빈 응답/에러 시 메시지 저장 없이 usage 해제).
 - **암호화 조회**: 암호화된 컬럼은 매 호출 랜덤 IV로 값이 달라져 등치 비교가 불가능 — 조회가
   필요한 값(예: 이메일)은 `hashForLookup()`으로 만든 `*_hash` 컬럼을 별도로 두고 그 컬럼에 필터.
+- **검색**(`app/api/search/route.ts`): 부분 일치는 해시로 만들 수 없어 SQL로 내려보낼 수 없음 —
+  RLS로 스코프된 메시지를 서버에서 전량 복호화한 뒤 `includes`로 필터하고 상위 50건만 반환.
+  이 O(n) 비용은 알려진 기술 부채 (`docs/TRD.md` 15장).
 - **Webhook idempotency**: `webhook_events` 테이블로 Polar 웹훅 이벤트 중복 처리를 방지
-  (service-role 전용).
+  (service-role 전용). 처리 순서는 서명 검증 → `webhook-id` 확인 → 원장 insert(unique violation
+  `23505`면 이미 처리했다는 뜻이므로 즉시 200) → 이벤트별 처리. 결제가 완료되지 않은
+  `incomplete`/`incomplete_expired` 구독에는 유료 플랜을 부여하지 않음.
+- **제품 스코프**: 팀/조직 계정, BYOK, 멀티모달 입력, 대화 공유/내보내기, 관리자 백오피스는
+  의도적으로 범위 밖 (`docs/PRD.md` 10장) — 요청이 없는 한 이 방향으로 확장하지 마세요.
 
 ## 코딩 컨벤션 (Coding Conventions)
 
@@ -130,6 +151,6 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
 - **UI 문자열/사용자向 에러 메시지는 한국어**, 코드 식별자·주석·커밋 메시지는 영어
   (`app/api/**/route.ts`의 기존 `errorResponse(...)` 톤 참고).
 - 커밋 메시지는 영어, Conventional Commits 스타일은 강제되지 않으나 최근 커밋은
-  `feat:`/`fix:`/`refactor:` 접두사를 사용하는 경향이 있음 (`git log`로 확인).
+  `feat:`/`fix:`/`refactor:`/`docs:` 접두사를 사용하는 경향이 있음 (`git log`로 확인).
 - Row Level Security가 모든 테이블에 적용되어 있음 — 사용자 스코프 클라이언트로 쿼리했는데
   결과가 비어있다면 앱 버그를 의심하기 전에 RLS 정책을 먼저 확인.

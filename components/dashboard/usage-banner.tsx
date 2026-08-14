@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { USAGE_WARNING_RATIO, usageRatio } from "@/lib/usage";
 
 interface UsageBannerProps {
   used: number;
@@ -8,8 +9,8 @@ interface UsageBannerProps {
 export function UsageBanner({ used, limit }: UsageBannerProps) {
   if (limit === null) return null;
 
-  const ratio = limit === 0 ? 1 : Math.min(used / limit, 1);
-  const isWarning = ratio >= 0.8;
+  const ratio = usageRatio(used, limit);
+  const isWarning = ratio >= USAGE_WARNING_RATIO;
 
   return (
     <div className="flex items-center gap-3 border-b border-neutral-800 bg-neutral-950 px-6 py-2">

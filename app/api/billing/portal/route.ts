@@ -1,11 +1,11 @@
 import { requireUser } from "@/lib/supabase/require-user";
-import { errorResponse } from "@/lib/api/error-response";
+import { errorResponse, unauthorizedResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
 import { getUserSubscription } from "@/lib/polar/subscription";
 
 export async function POST() {
   const { supabase, user } = await requireUser();
-  if (!user) return errorResponse("로그인이 필요합니다.", 401);
+  if (!user) return unauthorizedResponse();
 
   const subscription = await getUserSubscription(supabase, user.id);
   if (!subscription.polarCustomerId) {

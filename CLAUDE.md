@@ -35,6 +35,8 @@ API·스키마·플랜 한도·보안 설계를 바꾸면 `docs/TRD.md`의 해�
 - **usage 예약(`try_increment_usage`) 이후의 모든 실패 분기는 반드시 `release_usage`를 호출해야
   합니다.** 그렇지 않으면 실패한 요청이 사용자의 월간 한도를 영구적으로 소모합니다
   (`app/api/chat/route.ts`, `supabase/migrations/20260804165253_atomic_usage_limit.sql` 참고).
+  예약 이후 코드는 전체가 `try/catch`로 감싸여 있습니다 — `encrypt()`/`decrypt()`처럼 **throw하는**
+  호출이 밖으로 새면 해제 없이 500이 나갑니다. 새 코드는 반드시 이 블록 안에 두세요.
 - 새로운 과금 대상 동작을 추가할 때도 "작업 시작 전 예약 → 실패 시 해제" 패턴을 따르세요
   (증분을 작업 끝난 뒤에 하지 마세요 — 동시 요청 시 한도를 우회할 수 있습니다).
 
@@ -61,6 +63,7 @@ lib/
   gemini/client.ts                                        # Gemini SDK 인스턴스
   polar/{client,plans,subscription}.ts                    # 결제/플랜 로직
   encryption.ts                                            # AES-256-GCM + HMAC 조회 해시
+  usage.ts                                                  # 월 버킷/사용량 조회/게이지 비율
   api/error-response.ts, format.ts                          # 라우트 공통 헬퍼
 supabase/migrations/                                       # SQL 마이그레이션 (타임스탬프 순 적용)
 scripts/                                                     # 키 생성 / 암호화 마이그레이션 / 백필
@@ -135,8 +138,11 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
   이 O(n) 비용은 알려진 기술 부채 (`docs/TRD.md` 15장).
 - **Webhook idempotency**: `webhook_events` 테이블로 Polar 웹훅 이벤트 중복 처리를 방지
   (service-role 전용). 처리 순서는 서명 검증 → `webhook-id` 확인 → 원장 insert(unique violation
-  `23505`면 이미 처리했다는 뜻이므로 즉시 200) → 이벤트별 처리. 결제가 완료되지 않은
-  `incomplete`/`incomplete_expired` 구독에는 유료 플랜을 부여하지 않음.
+  `23505`면 이미 처리했다는 뜻이므로 즉시 200) → 이벤트별 처리. 처리(DB 쓰기)에 실패하면 방금 넣은
+  원장 행을 삭제하고 500을 반환해 Polar가 재전송하도록 함 — 남겨두면 재전송이 중복으로 걸러져
+  이벤트가 유실됨. 결제가 완료되지 않은 `incomplete`/`incomplete_expired` 구독에는 유료 플랜을
+  부여하지 않음. 구독 upsert의 `status`는 상수가 아니라 Polar 상태를 매핑해서 씀
+  (`past_due`/`unpaid` → `past_due`, 그 외 → `active`).
 - **제품 스코프**: 팀/조직 계정, BYOK, 멀티모달 입력, 대화 공유/내보내기, 관리자 백오피스는
   의도적으로 범위 밖 (`docs/PRD.md` 10장) — 요청이 없는 한 이 방향으로 확장하지 마세요.
 
@@ -146,8 +152,12 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
   PascalCase (`ChatPanel`, `DashboardHeader`) — **named export만 사용**, default export 없음.
 - 훅/유틸 파일: camelCase 함수명 (`requireUser`, `formatDate`, `hashForLookup`), 파일명은 kebab-case.
 - API 라우트 에러 응답은 항상 `lib/api/error-response.ts`의 `errorResponse(message, status)`를
-  통해 `{ error }` 형태로 통일 — `Response.json({ error })`을 직접 인라인하지 않음.
-- 날짜 포맷은 `lib/format.ts`의 `formatDate` 재사용 (`ko-KR` 로케일).
+  통해 `{ error }` 형태로 통일 — `Response.json({ error })`을 직접 인라인하지 않음. 인증 실패는
+  `unauthorizedResponse()`, 요청 본문 파싱은 `readJsonBody<T>(request)`(실패 시 `null`)를 사용.
+- 날짜 포맷은 `lib/format.ts`의 `formatDate` 재사용 (`ko-KR` 로케일). 사용량 계산은 `lib/usage.ts`의
+  `currentUsageMonth` / `getUsedCount` / `usageRatio` 재사용 (`usage` 테이블 직접 조회 금지).
+- 목록·검색처럼 한 행이 깨져도 전체가 실패하면 안 되는 경로는 `decrypt` 대신
+  `decryptOrFallback(value, fallback)`을 사용 (Gemini 문맥처럼 정확성이 필요한 경로는 `decrypt`).
 - **UI 문자열/사용자向 에러 메시지는 한국어**, 코드 식별자·주석·커밋 메시지는 영어
   (`app/api/**/route.ts`의 기존 `errorResponse(...)` 톤 참고).
 - 커밋 메시지는 영어, Conventional Commits 스타일은 강제되지 않으나 최근 커밋은

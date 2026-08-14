@@ -1,10 +1,12 @@
 import { requireUser } from "@/lib/supabase/require-user";
-import { errorResponse } from "@/lib/api/error-response";
-import { decrypt, encrypt } from "@/lib/encryption";
+import { errorResponse, unauthorizedResponse } from "@/lib/api/error-response";
+import { decryptOrFallback, encrypt } from "@/lib/encryption";
+
+const UNTITLED_CONVERSATION = "새 대화";
 
 export async function GET() {
   const { supabase, user } = await requireUser();
-  if (!user) return errorResponse("로그인이 필요합니다.", 401);
+  if (!user) return unauthorizedResponse();
 
   const { data, error } = await supabase
     .from("conversations")
@@ -16,9 +18,10 @@ export async function GET() {
     return errorResponse("대화 목록을 불러오지 못했습니다.", 500);
   }
 
+  // A single undecryptable title must not blank out the whole sidebar.
   const conversations = data.map(({ id, title_encrypted, created_at }) => ({
     id,
-    title: decrypt(title_encrypted),
+    title: decryptOrFallback(title_encrypted, UNTITLED_CONVERSATION),
     created_at,
   }));
 
@@ -27,11 +30,11 @@ export async function GET() {
 
 export async function POST() {
   const { supabase, user } = await requireUser();
-  if (!user) return errorResponse("로그인이 필요합니다.", 401);
+  if (!user) return unauthorizedResponse();
 
   const { data, error } = await supabase
     .from("conversations")
-    .insert({ user_id: user.id, title_encrypted: encrypt("새 대화") })
+    .insert({ user_id: user.id, title_encrypted: encrypt(UNTITLED_CONVERSATION) })
     .select("id, title_encrypted, created_at")
     .single();
 
@@ -41,7 +44,13 @@ export async function POST() {
   }
 
   return Response.json(
-    { conversation: { id: data.id, title: decrypt(data.title_encrypted), created_at: data.created_at } },
+    {
+      conversation: {
+        id: data.id,
+        title: decryptOrFallback(data.title_encrypted, UNTITLED_CONVERSATION),
+        created_at: data.created_at,
+      },
+    },
     { status: 201 }
   );
 }

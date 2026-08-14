@@ -94,6 +94,20 @@ export function decrypt(payload: string | null | undefined): string | null {
 }
 
 /**
+ * `decrypt` for list/search paths, where one unreadable row (legacy plaintext, a
+ * value written under a previous ENCRYPTION_KEY) must not fail the whole request.
+ * Returns `fallback` and logs instead of throwing.
+ */
+export function decryptOrFallback(payload: string | null | undefined, fallback = ""): string {
+  try {
+    return decrypt(payload) ?? fallback;
+  } catch (error) {
+    console.error("Failed to decrypt stored value, using fallback", error);
+    return fallback;
+  }
+}
+
+/**
  * Deterministic HMAC-SHA256 hash for equality lookups against encrypted columns
  * (e.g. `email_hash = hashForLookup(input)`). Does not normalize input (no
  * lowercasing/trimming) — callers are responsible for normalizing a value the

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatDate } from "@/lib/format";
 
 interface SearchResult {
   id: string;
@@ -15,6 +16,9 @@ interface SearchModalProps {
   onClose: () => void;
   onSelectConversation: (id: string) => void;
 }
+
+/** Keystrokes settle before the (server-side, O(n) decrypting) search runs. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 function highlight(text: string, query: string) {
   if (!query) return text;
@@ -42,21 +46,33 @@ function highlight(text: string, query: string) {
 
 export function SearchModal({ onClose, onSelectConversation }: SearchModalProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  // Results are stored together with the query that produced them, so a stale
+  // response (or a cleared search box) can be ignored at render time instead of
+  // being wiped by an extra state update.
+  const [lastSearch, setLastSearch] = useState<{ query: string; results: SearchResult[] } | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
+  // Escape closes the modal wherever focus happens to be, not just in the input.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const trimmedQuery = query.trim();
 
   useEffect(() => {
-    if (!trimmedQuery) {
-      return;
-    }
+    if (!trimmedQuery) return;
 
     let cancelled = false;
 
@@ -69,20 +85,22 @@ export function SearchModal({ onClose, onSelectConversation }: SearchModalProps)
         const data = await response.json();
         if (cancelled) return;
 
-        setResults(data.results ?? []);
-        setHasSearched(true);
+        setLastSearch({ query: trimmedQuery, results: data.results ?? [] });
       } catch (error) {
         console.error("Failed to search messages", error);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
   }, [trimmedQuery]);
+
+  // Only show hits that belong to what is currently typed.
+  const results = lastSearch?.query === trimmedQuery ? lastSearch.results : null;
 
   function handleSelect(conversationId: string) {
     onSelectConversation(conversationId);
@@ -157,9 +175,9 @@ export function SearchModal({ onClose, onSelectConversation }: SearchModalProps)
             <p className="px-3 py-6 text-center text-sm text-neutral-500">
               검색할 단어를 입력하세요.
             </p>
-          ) : isLoading ? (
+          ) : isLoading || results === null ? (
             <p className="px-3 py-6 text-center text-sm text-neutral-500">검색 중...</p>
-          ) : hasSearched && results.length === 0 ? (
+          ) : results.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-neutral-500">
               &ldquo;{trimmedQuery}&rdquo;에 대한 검색 결과가 없습니다.
             </p>
@@ -177,7 +195,7 @@ export function SearchModal({ onClose, onSelectConversation }: SearchModalProps)
                         {result.conversationTitle}
                       </span>
                       <span className="shrink-0 text-[11px] text-neutral-600">
-                        {new Date(result.createdAt).toLocaleDateString("ko-KR")}
+                        {formatDate(result.createdAt)}
                       </span>
                     </div>
                     <p className="line-clamp-2 text-sm text-neutral-400">

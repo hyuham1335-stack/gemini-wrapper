@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/supabase/require-user";
-import { errorResponse } from "@/lib/api/error-response";
+import { errorResponse, readJsonBody, unauthorizedResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
 import { getUserSubscription } from "@/lib/polar/subscription";
 
@@ -9,14 +9,10 @@ interface CancelRequestBody {
 
 export async function POST(request: Request) {
   const { supabase, user } = await requireUser();
-  if (!user) return errorResponse("로그인이 필요합니다.", 401);
+  if (!user) return unauthorizedResponse();
 
-  let body: CancelRequestBody = {};
-  try {
-    body = await request.json();
-  } catch {
-    // 빈 본문이면 기본값(취소)으로 처리
-  }
+  // An empty body means "cancel" — the resume flow always sends { resume: true }.
+  const body = (await readJsonBody<CancelRequestBody>(request)) ?? {};
 
   const subscription = await getUserSubscription(supabase, user.id);
   if (!subscription.polarSubscriptionId || subscription.status !== "active") {

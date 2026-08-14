@@ -11,6 +11,10 @@ export interface UserSubscription {
   polarSubscriptionId: string | null;
 }
 
+/**
+ * Fallback for users whose `subscriptions` row does not exist yet (the
+ * `on_auth_user_created_subscription` trigger normally creates it at signup).
+ */
 const DEFAULT_FREE_SUBSCRIPTION: UserSubscription = {
   plan: "free",
   status: "active",
@@ -24,7 +28,7 @@ export async function getUserSubscription(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<UserSubscription> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("subscriptions")
     .select(
       "plan, status, cancel_at_period_end, current_period_end, polar_customer_id, polar_subscription_id"
@@ -32,6 +36,11 @@ export async function getUserSubscription(
     .eq("user_id", userId)
     .maybeSingle();
 
+  if (error) {
+    // Falling back to free is the safe direction: it can never over-grant quota.
+    console.error("Failed to load subscription, falling back to free", error);
+    return DEFAULT_FREE_SUBSCRIPTION;
+  }
   if (!data) return DEFAULT_FREE_SUBSCRIPTION;
 
   return {
@@ -42,8 +51,4 @@ export async function getUserSubscription(
     polarCustomerId: data.polar_customer_id,
     polarSubscriptionId: data.polar_subscription_id,
   };
-}
-
-export function currentUsageMonth(): string {
-  return new Date().toISOString().slice(0, 7);
 }

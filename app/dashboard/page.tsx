@@ -141,10 +141,10 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleNewConversation() {
+  async function createConversation(): Promise<Conversation | null> {
     try {
       const response = await fetch("/api/conversations", { method: "POST" });
-      if (!response.ok) return;
+      if (!response.ok) return null;
 
       const data = await response.json();
       const newConversation: Conversation = {
@@ -155,9 +155,15 @@ export default function DashboardPage() {
       };
       setConversations((prev) => [newConversation, ...prev]);
       setActiveConversationId(newConversation.id);
+      return newConversation;
     } catch (error) {
       console.error("Failed to create conversation", error);
+      return null;
     }
+  }
+
+  async function handleNewConversation() {
+    await createConversation();
   }
 
   async function handleDeleteConversation(id: string) {
@@ -181,9 +187,11 @@ export default function DashboardPage() {
   }
 
   async function handleSendMessage(content: string) {
-    if (!activeConversationId) return;
+    // A freshly signed-up user lands here with no conversations at all; without
+    // this the first message they type is silently dropped.
+    const conversationId = activeConversationId ?? (await createConversation())?.id;
+    if (!conversationId) return;
 
-    const conversationId = activeConversationId;
     const userMessage: ChatMessage = { id: `m-${Date.now()}`, role: "user", content };
     const assistantMessageId = `${userMessage.id}-reply`;
 
@@ -267,10 +275,16 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error("Failed to stream chat response", error);
+      const notice = "⚠️ 네트워크 오류로 응답을 가져오지 못했습니다.";
       updateMessages((messages) =>
         messages.map((message) =>
           message.id === assistantMessageId
-            ? { ...message, content: "⚠️ 네트워크 오류로 응답을 가져오지 못했습니다." }
+            ? {
+                ...message,
+                // Keep whatever already streamed in; overwriting it would make
+                // a partial answer vanish from the screen.
+                content: message.content ? `${message.content}\n\n${notice}` : notice,
+              }
             : message
         )
       );

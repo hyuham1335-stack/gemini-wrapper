@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PLAN_LABELS, isPaidPlan } from "@/lib/polar/plans";
 import type { UserSubscription } from "@/lib/polar/subscription";
 import { formatDate } from "@/lib/format";
+import { USAGE_WARNING_RATIO, usageRatio } from "@/lib/usage";
 
 interface BillingPanelProps {
   subscription: UserSubscription;
@@ -24,8 +25,8 @@ function UsageMeter({ used, limit }: { used: number; limit: number | null }) {
     );
   }
 
-  const ratio = limit === 0 ? 1 : Math.min(used / limit, 1);
-  const isWarning = ratio >= 0.8;
+  const ratio = usageRatio(used, limit);
+  const isWarning = ratio >= USAGE_WARNING_RATIO;
 
   return (
     <div className="flex flex-col gap-2">

@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/supabase/require-user";
-import { errorResponse } from "@/lib/api/error-response";
+import { errorResponse, readJsonBody, unauthorizedResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
 import { PLAN_PRODUCT_IDS } from "@/lib/polar/plans";
 import { getUserSubscription } from "@/lib/polar/subscription";
@@ -10,14 +10,10 @@ interface ChangeRequestBody {
 
 export async function PATCH(request: Request) {
   const { supabase, user } = await requireUser();
-  if (!user) return errorResponse("로그인이 필요합니다.", 401);
+  if (!user) return unauthorizedResponse();
 
-  let body: ChangeRequestBody;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse("잘못된 요청 본문입니다.", 400);
-  }
+  const body = await readJsonBody<ChangeRequestBody>(request);
+  if (!body) return errorResponse("잘못된 요청 본문입니다.", 400);
 
   const { plan: targetPlan } = body;
   if (targetPlan !== "pro" && targetPlan !== "unlimited") {

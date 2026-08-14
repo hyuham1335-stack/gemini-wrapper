@@ -1,9 +1,9 @@
 import { requireUser } from "@/lib/supabase/require-user";
-import { errorResponse } from "@/lib/api/error-response";
+import { errorResponse, unauthorizedResponse } from "@/lib/api/error-response";
 
 export async function DELETE(_request: Request, ctx: RouteContext<"/api/conversations/[id]">) {
   const { supabase, user } = await requireUser();
-  if (!user) return errorResponse("로그인이 필요합니다.", 401);
+  if (!user) return unauthorizedResponse();
 
   const { id } = await ctx.params;
 

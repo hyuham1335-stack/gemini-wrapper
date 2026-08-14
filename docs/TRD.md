@@ -2,8 +2,8 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 문서 버전 | 0.1 |
-| 최종 수정 | 2026-08-13 |
+| 문서 버전 | 0.2 |
+| 최종 수정 | 2026-08-14 |
 | 대상 | 이 저장소에서 작업하는 개발자 / 코딩 에이전트 |
 | 관련 문서 | [PRD.md](./PRD.md), [../README.md](../README.md), [../CLAUDE.md](../CLAUDE.md) |
 
@@ -79,6 +79,7 @@ lib/
   gemini/client.ts
   polar/{client,plans,subscription}.ts
   encryption.ts
+  usage.ts                         사용량 월 버킷 / 조회 / 게이지 비율
   api/error-response.ts, format.ts
 supabase/migrations/             타임스탬프 순 SQL 마이그레이션
 scripts/                         키 생성 / 암호화 마이그레이션 / 백필
@@ -157,7 +158,7 @@ RLS 활성 + **정책 0개** = anon/authenticated 완전 차단, service-role만
 
 | 메서드 | 경로 | 요청 | 성공 응답 | 주요 실패 |
 | --- | --- | --- | --- | --- |
-| POST | `/api/chat` | `{ conversationId, content }` | `text/plain` 스트림 | 400 잘못된 본문 / 404 대화 없음 / **429 `{ error: "limit_exceeded", upgrade_url: "/pricing" }`** / 500 |
+| POST | `/api/chat` | `{ conversationId, content }` | `text/plain` 스트림 | 400 잘못된 본문 / 404 대화 없음 / **429 `{ error: "limit_exceeded", upgrade_url: "/pricing" }`** / 429 Gemini 혼잡 / 502 Gemini 오류 / 500 |
 | GET | `/api/conversations` | — | `{ conversations: [{ id, title, created_at }] }` | 500 |
 | POST | `/api/conversations` | — | `201 { conversation }` | 500 |
 | DELETE | `/api/conversations/[id]` | — | `204` | 404 / 500 |
@@ -169,7 +170,7 @@ RLS 활성 + **정책 0개** = anon/authenticated 완전 차단, service-role만
 | POST | `/api/subscription/cancel` | `{ resume?: boolean }` | `{ ok: true }` | 400 / 500 |
 | POST | `/api/checkout` | `{ plan }` | `{ url }` | 400 이미 활성 구독 / 500 |
 | POST | `/api/billing/portal` | — | `{ url }` | 400 고객 정보 없음 / 500 |
-| POST | `/api/webhooks/polar` | Polar 서명 페이로드 | `{ ok: true }` | 403 서명 불일치 / 400 payload·헤더 누락 / 500 |
+| POST | `/api/webhooks/polar` | Polar 서명 페이로드 | `{ ok: true }` | 403 서명 불일치 / 400 payload·헤더 누락 / 500 처리 실패(재시도 유도) |
 
 동적 라우트는 Next.js 16의 `RouteContext<"/api/...">` 타입을 사용하고 `params`는 **await**해야 합니다.
 
@@ -193,7 +194,12 @@ RLS 활성 + **정책 0개** = anon/authenticated 완전 차단, service-role만
 > 그렇지 않으면 실패한 요청이 사용자의 월 한도를 영구히 소모합니다.
 
 `app/api/chat/route.ts`의 해제 지점: 대화 조회 실패, 대화 없음, 기록 조회 실패, 사용자 메시지 저장 실패,
-Gemini 호출 실패, 스트림 중단, **빈 응답**. 해제는 `usageReserved` 플래그로 1회만 실행됩니다.
+Gemini 호출 실패, 스트림 중단, **클라이언트 연결 종료**(`ReadableStream.cancel`), **빈 응답**.
+해제는 `usageReserved` 플래그로 1회만 실행됩니다.
+
+예약 이후의 코드는 전체가 `try/catch`로 감싸여 있습니다. `encrypt()`/`decrypt()`는 키가 없거나
+저장값이 손상되면 **throw**하는데, 이 예외가 밖으로 새면 Next.js가 500을 내보내는 동안 예약된 슬롯이
+그대로 소모됩니다. 새 코드를 예약 이후에 추가할 때도 이 `try/catch` 안에 두세요.
 
 새로운 과금 대상 동작을 추가할 때도 동일한 "작업 전 예약 → 실패 시 해제" 패턴을 따르세요.
 작업 완료 후 증가시키는 방식은 금지입니다(동시 요청 레이스).
@@ -221,6 +227,9 @@ Gemini 호출 실패, 스트림 중단, **빈 응답**. 해제는 `usageReserved
 - `encrypt(text)` → `iv:authTag:ciphertext` (모두 hex). AES-256-GCM, IV 16바이트(프로젝트 스펙상 의도된
   선택), 호출마다 새 랜덤 IV.
 - `decrypt(payload)` → 형식 오류·변조·키 불일치 시 throw.
+- `decryptOrFallback(payload, fallback)` → 목록/검색 경로 전용. 한 행이 복호화되지 않아도 요청 전체를
+  실패시키지 않도록 로그를 남기고 `fallback`을 돌려줍니다 (대화 목록, 메시지 목록, 검색에서 사용).
+  값이 반드시 정확해야 하는 경로(예: Gemini에 넘길 대화 문맥)에는 쓰지 말고 `decrypt`를 쓰세요.
 - `hashForLookup(value)` → HMAC-SHA256(hex). 입력을 정규화하지 않으므로 저장·조회 시 동일하게
   정규화하는 것은 호출자 책임입니다.
 - 키(`ENCRYPTION_KEY`, `HASH_KEY`)는 64자 hex여야 하며 형식 검증 후 프로세스 내 캐시됩니다.
@@ -229,8 +238,10 @@ Gemini 호출 실패, 스트림 중단, **빈 응답**. 해제는 `usageReserved
 
 랜덤 IV 때문에 같은 값도 매번 다른 암호문이 되어 **암호화 컬럼은 SQL 등치 비교가 불가능**합니다.
 조회가 필요한 값은 `*_hash` 컬럼(HMAC)을 따로 두고 그 컬럼에 필터를 겁니다(예: `email_hash`).
-`/api/search`는 해시로 부분 일치를 만들 수 없어, RLS로 스코프된 행을 서버에서 전량 복호화한 뒤
-대소문자 무시 `includes`로 필터하고 상위 50건만 반환합니다 — 데이터가 커지면 재설계가 필요합니다.
+`/api/search`는 해시로 부분 일치를 만들 수 없어, RLS로 스코프된 행을 서버에서 복호화한 뒤
+대소문자 무시 `includes`로 필터합니다. 복호화와 매칭을 한 루프에서 처리해 **50건을 채우면 즉시 중단**
+하므로 최신순 상위 매치까지만 복호화하지만, 매치가 적은 질의는 여전히 전량 복호화합니다 — 데이터가
+커지면 재설계가 필요합니다.
 
 ## 10. 결제 / 웹훅 설계
 
@@ -241,8 +252,16 @@ Gemini 호출 실패, 스트림 중단, **빈 응답**. 해제는 `usageReserved
 - 웹훅 처리 순서: `validateEvent()` 서명 검증 → `webhook-id` 헤더 확인 →
   `webhook_events`에 **먼저 insert**(unique violation `23505` = 이미 처리 → 즉시 `{ ok: true }`) →
   이벤트 타입별 처리.
+- **처리 실패 시 원장 롤백**: 핸들러가 DB 쓰기에 실패하면 방금 넣은 `webhook_events` 행을 삭제하고
+  500을 반환합니다. 원장 행을 남겨두면 Polar의 재전송이 "이미 처리됨"으로 걸러져 이벤트가 영구히
+  유실됩니다. 재시도해도 절대 성공할 수 없는 경우(사용자 매칭 실패, 미등록 product id, 결제 미완료)는
+  실패가 아니라 **skip**으로 간주해 200을 반환합니다.
 - 이벤트 매핑: `subscription.created|active|updated|canceled|uncanceled` → 구독 upsert /
   `subscription.past_due` → `status = past_due` / `subscription.revoked` → `plan = free`, `status = revoked`.
+- upsert의 `status`는 상수 `active`가 아니라 Polar 상태를 매핑해 씁니다(`past_due`/`unpaid` → `past_due`,
+  그 외 → `active`). 상수로 쓰면 연체 구독에 `subscription.updated`가 도착했을 때 `past_due`가 조용히
+  `active`로 되돌아가 유료 한도가 복구됩니다. Polar의 `canceled`는 기간 말까지 유효한 상태이므로
+  `active`로 두고, 접근 종료는 `subscription.revoked`가 담당합니다.
 - `incomplete`, `incomplete_expired` 상태는 결제가 완료되지 않은 것이므로 플랜을 부여하지 않고 건너뜁니다
   (이후 `active`/`updated` 이벤트에서 재동기화).
 - 플랜 변경·해지는 자체 DB를 먼저 쓰지 않고 Polar SDK를 호출한 뒤, 결과를 웹훅으로 되받아 반영합니다
@@ -255,14 +274,20 @@ Gemini 호출 실패, 스트림 중단, **빈 응답**. 해제는 `usageReserved
 - 보호 라우트: `/dashboard`, `/billing` → 비로그인 시 `/login?redirectedFrom=...`.
 - 인증 라우트: `/login` → 로그인 상태면 `/dashboard`.
 - `app/auth/callback/route.ts`가 `exchangeCodeForSession` 후 프로필을 암호화 동기화하고,
-  `redirectedFrom`이 `/`로 시작할 때만 그 경로로 되돌려 보냅니다(open redirect 방지).
+  `safeRedirectPath()`를 통과한 경로로만 되돌려 보냅니다: `/`로 시작해야 하며 `//`·`/\`로 시작하는
+  값은 프로토콜 상대 URL로 해석될 수 있어 `/dashboard`로 대체합니다(open redirect 방지).
+- 프로필 동기화는 best-effort입니다 — 암호화 키 오설정이나 쓰기 실패가 로그인 자체를 막지 않습니다.
 
 ## 12. 코딩 규약
 
 - 컴포넌트 파일은 kebab-case, 컴포넌트 함수는 PascalCase, **named export만** (default export 없음).
 - 유틸/훅 함수는 camelCase, 파일명은 kebab-case.
 - API 에러 응답은 항상 `errorResponse(...)` 사용 — `Response.json({ error })` 직접 인라인 금지.
+- 인증 실패는 `unauthorizedResponse()`, 요청 본문 파싱은 `readJsonBody<T>(request)`(실패 시 `null`)를
+  사용합니다 — 둘 다 `lib/api/error-response.ts`.
 - 날짜 포맷은 `lib/format.ts`의 `formatDate`(`ko-KR`) 재사용.
+- 사용량 관련 계산(`currentUsageMonth` / `getUsedCount` / `usageRatio` / `USAGE_WARNING_RATIO`)은
+  `lib/usage.ts`에 모여 있습니다 — 라우트나 컴포넌트에서 `usage` 테이블을 직접 조회하지 마세요.
 - 사용자 노출 문자열·에러 메시지는 **한국어**, 코드 식별자·주석·커밋 메시지는 **영어**.
 - 커밋은 영어 + `feat:` / `fix:` / `refactor:` / `docs:` 접두사 관례.
 
@@ -308,9 +333,9 @@ npm run db:backfill-chat-encryption   # 1회성: 대화/메시지 암호화 백�
 
 | 항목 | 내용 |
 | --- | --- |
-| 검색 확장성 | `/api/search`는 사용자의 전체 메시지를 메모리에서 복호화·필터 — 대화량 증가 시 O(n) 비용. |
+| 검색 확장성 | `/api/search`는 메시지를 메모리에서 복호화·필터 — 50건에서 조기 종료하지만 매치가 없는 질의는 여전히 O(n). |
 | 테스트 부재 | 사용량 예약/해제, 웹훅 idempotency 등 회귀 위험이 큰 로직이 수동 검증에만 의존. |
 | 키 로테이션 | `ENCRYPTION_KEY` 교체 절차가 없음(교체 시 기존 데이터 복호화 불가). |
 | 모델 고정 | `GEMINI_MODEL`이 상수로 하드코딩되어 런타임 전환 불가. |
-| 부분 응답 | 스트림 중단 시 이미 사용자에게 표시된 텍스트가 저장되지 않아 화면과 DB가 불일치. |
+| 부분 응답 | 스트림 중단 시 이미 사용자에게 표시된 텍스트가 저장되지 않아 화면과 DB가 불일치(사용량은 반환됨). |
 | RLS 디버깅 | 사용자 스코프 클라이언트 조회 결과가 비면 앱 버그보다 RLS 정책을 먼저 확인할 것. |

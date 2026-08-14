@@ -1,12 +1,28 @@
 import { requireUser } from "@/lib/supabase/require-user";
-import { errorResponse } from "@/lib/api/error-response";
-import { decrypt } from "@/lib/encryption";
+import { errorResponse, unauthorizedResponse } from "@/lib/api/error-response";
+import { decryptOrFallback } from "@/lib/encryption";
+
+interface SearchResult {
+  id: string;
+  conversationId: string;
+  conversationTitle: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}
+
+/** Matches are filtered in memory, so the response is capped (see docs/TRD.md §15). */
+const MAX_RESULTS = 50;
+/** Guards against pathological queries; longer needles can't match a stored message anyway. */
+const MAX_QUERY_LENGTH = 200;
 
 export async function GET(request: Request) {
   const { supabase, user } = await requireUser();
-  if (!user) return errorResponse("로그인이 필요합니다.", 401);
+  if (!user) return unauthorizedResponse();
 
-  const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
+  const query = (new URL(request.url).searchParams.get("q") ?? "")
+    .trim()
+    .slice(0, MAX_QUERY_LENGTH);
   if (!query) return Response.json({ results: [] });
 
   const { data: conversations, error: conversationsError } = await supabase
@@ -23,16 +39,13 @@ export async function GET(request: Request) {
   }
 
   const titleById = new Map(
-    conversations.map(({ id, title_encrypted }) => [id, decrypt(title_encrypted)])
+    conversations.map(({ id, title_encrypted }) => [id, decryptOrFallback(title_encrypted)])
   );
 
   const { data: messages, error: messagesError } = await supabase
     .from("messages")
     .select("id, conversation_id, role, content_encrypted, created_at")
-    .in(
-      "conversation_id",
-      conversations.map((conversation) => conversation.id)
-    )
+    .in("conversation_id", [...titleById.keys()])
     .order("created_at", { ascending: false });
 
   if (messagesError) {
@@ -42,18 +55,24 @@ export async function GET(request: Request) {
 
   // content_encrypted uses a random IV per row, so matching can't be pushed
   // down to SQL — every candidate row must be decrypted and filtered here.
+  // Decryption and matching are interleaved so the scan can stop at MAX_RESULTS
+  // instead of decrypting every message the user has ever sent.
   const needle = query.toLowerCase();
-  const results = messages
-    .map((message) => ({
+  const results: SearchResult[] = [];
+  for (const message of messages) {
+    const content = decryptOrFallback(message.content_encrypted);
+    if (!content.toLowerCase().includes(needle)) continue;
+
+    results.push({
       id: message.id,
       conversationId: message.conversation_id,
       conversationTitle: titleById.get(message.conversation_id) ?? "",
       role: message.role as "user" | "assistant",
-      content: decrypt(message.content_encrypted),
+      content,
       createdAt: message.created_at,
-    }))
-    .filter((message) => message.content.toLowerCase().includes(needle))
-    .slice(0, 50);
+    });
+    if (results.length === MAX_RESULTS) break;
+  }
 
   return Response.json({ results });
 }

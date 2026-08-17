@@ -321,7 +321,9 @@ npm run db:migrate-encrypt            # 1회성: 기존 평문 데이터 암호�
 npm run db:backfill-chat-encryption   # 1회성: 대화/메시지 암호화 백필
 ```
 
-- **자동화된 테스트 스위트가 없습니다.** 검증 게이트는 `npm run lint` + `npm run build`입니다.
+- **자동화된 테스트 스위트가 없습니다.** 검증 게이트는 3단계입니다 — L1 `npx tsc --noEmit` + `npm run lint`,
+  L2 `npm run build`, L3 변경 위치별 수동 스모크. 위치별 스모크 항목과 통과 기준은 `../CLAUDE.md`의
+  「검증 루프(Verification Loop)」 표를 단일 출처로 씁니다.
 - `scripts/`는 `tsx --env-file=.env.local`로 실행되며 실제 `.env.local` + Supabase 프로젝트가 필요합니다.
 - DB 마이그레이션은 `supabase/migrations/`의 SQL을 파일명(타임스탬프) 순으로 Supabase MCP 또는 CLI로
   적용합니다. 마이그레이션 러너/ORM은 없습니다.

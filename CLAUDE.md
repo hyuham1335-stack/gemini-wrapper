@@ -103,6 +103,37 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
   MCP 도구 또는 CLI를 통해 적용합니다 — 별도 마이그레이션 러너/ORM 없음.
 - 종료 후 Node 프로세스가 남으면 `Get-Process node` 확인 → `taskkill /IM node.exe /F`.
 
+## 검증 루프 (Verification Loop)
+
+테스트 러너가 없으므로 **3단계 게이트**로 대체합니다. 변경 성격에 따라 필요한 단계까지 올라가되,
+L1·L2는 코드를 건드린 모든 작업에서 생략하지 않습니다.
+
+| 단계 | 명령 | 언제 |
+| --- | --- | --- |
+| **L1 정적** | `npx tsc --noEmit` → `npm run lint` | 코드 수정 직후 매번 (수십 초, 타입/린트 회귀를 먼저 걸러냄) |
+| **L2 빌드** | `npm run build` | 커밋·배포 전 항상 (App Router 라우트/서버 컴포넌트 오류는 여기서만 드러남) |
+| **L3 스모크** | 아래 표의 해당 행만 | 런타임 동작(예약/해제, 웹훅, 스트리밍, RLS, UI)을 바꿨을 때 |
+
+**L3 스모크 — 변경 위치별 최소 확인**
+
+| 바꾼 곳 | 확인 방법 | 통과 기준 |
+| --- | --- | --- |
+| `lib/**` 순수 함수 (`encryption`/`usage`/`plans`/`format`) | 스크래치패드에 일회성 스크립트를 쓰고 **프로젝트 루트에서** `npx tsx --env-file=.env.local --tsconfig ./tsconfig.json <scratchpad>/smoke-x.ts` (이렇게 하면 `@/lib/...` alias가 그대로 동작) | round-trip·경계값 출력이 기대값 (예: `decrypt(encrypt(s)) === s`, 같은 입력의 두 암호문이 서로 다름, `usageRatio(n, 0) === 1`) |
+| API 라우트 (`app/api/**`) | `npm run dev` 후 인증 없이 `curl` 1회 + 로그인 쿠키로 정상 경로 1회 | 미인증은 401 + `{ "error": ... }` 한국어 메시지, 정상 경로는 기대 스키마 |
+| `app/api/chat/route.ts` 등 **과금 경로** | 정상 1회 → 실패를 일부러 유발(잘못된 `conversationId` 등) 1회, 그 전후로 사용량을 SQL로 읽기 (Supabase MCP `execute_sql`: `select used from usage where user_id = '<uid>' and month = to_char(now(), 'YYYY-MM')`) | 성공은 +1, 실패는 기준선으로 복귀. **숫자로 확인하고 코드만 읽고 판단하지 말 것** (절대 규칙의 예약/해제 불변식) |
+| `app/api/webhooks/polar/route.ts` | 동일한 `webhook-id` 헤더로 같은 페이로드를 2회 POST | 두 응답 모두 200, `webhook_events` 행은 1개, `subscriptions.plan/status`가 기대값 |
+| `supabase/migrations/*.sql` | 적용 후 `list_migrations` + `get_advisors`(security·performance) | 마이그레이션 목록에 반영되고 새 테이블에 RLS 미적용 경고가 없음 |
+| `components/**`, `app/**/page.tsx` | `/run` 스킬로 dev 서버를 띄워 해당 화면 확인 | 로딩·빈 상태·에러 상태가 한국어로 정상 표시, 콘솔 에러 없음 |
+| `docs/PRD.md`·`docs/TRD.md` 대상 변경 | 문서 동기화 규칙대로 같은 커밋에 문서 갱신 | 코드와 문서의 한도·API·스키마 서술이 일치 |
+
+**루프 규칙**
+
+- L1/L2 실패는 원인을 고쳐 재실행하고, 3회 시도 후에도 실패하면 커밋하지 않고 실패 내용을 보고합니다.
+- 스모크는 **본인 계정 + Polar sandbox**로만 합니다 — 프로덕션 데이터나 실제 결제로 검증하지 않습니다.
+- 스모크 스크립트·curl 로그는 스크래치패드에 두고 커밋하지 않습니다. 반복 가치가 생기면 그때
+  `scripts/`에 정식 추가하고 `package.json`·README·`docs/TRD.md` 14장에 함께 기재합니다.
+- 실행하지 못한 단계는 "검증했다"고 말하지 말고, 무엇을 왜 건너뛰었는지 보고에 명시합니다.
+
 ## 워크플로 트리거 (Workflow Triggers)
 
 - **"배포" / "배포해줘" / "ship" / "ship it"** → 커밋 후 푸쉬 요청입니다.
@@ -111,6 +142,8 @@ npm run db:backfill-chat-encryption      # 대화/메시지 암호화 백필 (1�
   영어 커밋 메시지 작성 → 현재 브랜치를 `origin`에 푸쉬.
 - lint/build는 **항상** 돌립니다. 실패하면 원인을 고치고 재실행하며, 3회 시도 후에도 실패하면
   커밋하지 말고 실패 내용을 보고하세요. `--no-verify`나 force push는 사용하지 않습니다.
+  런타임 동작을 바꿨다면 커밋 전에 「검증 루프」 L3 스모크까지 마치고, 무엇을 검증했는지 보고에
+  한 줄로 남기세요.
 - 시크릿 파일(`.env*`, `*.pem` 등)이 변경 목록에 보이면 커밋하지 말고 즉시 보고하세요 (절대 규칙 참고).
 
 ## 도메인 컨텍스트 (Domain Context)

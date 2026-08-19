@@ -52,3 +52,21 @@ export async function getUserSubscription(
     polarSubscriptionId: data.polar_subscription_id,
   };
 }
+
+/** A subscription row that still carries a usable Polar subscription id. */
+export type LiveSubscription = UserSubscription & { polarSubscriptionId: string };
+
+/**
+ * True while the row still points at a subscription Polar is managing for us.
+ *
+ * `past_due` counts as live: Polar is retrying the payment and the subscription
+ * still exists, so the user must go through plan-change/cancel/portal rather
+ * than start a second checkout (which would bill them twice and orphan the
+ * first subscription, since the local row is keyed by `user_id`). `revoked` is
+ * the only state where starting over is correct.
+ */
+export function hasLiveSubscription(
+  subscription: UserSubscription
+): subscription is LiveSubscription {
+  return Boolean(subscription.polarSubscriptionId) && subscription.status !== "revoked";
+}

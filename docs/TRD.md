@@ -266,6 +266,22 @@ Gemini 호출 실패, 스트림 중단, **클라이언트 연결 종료**(`Reada
   (이후 `active`/`updated` 이벤트에서 재동기화).
 - 플랜 변경·해지는 자체 DB를 먼저 쓰지 않고 Polar SDK를 호출한 뒤, 결과를 웹훅으로 되받아 반영합니다
   (단일 진실 공급원은 Polar).
+- **구독 "살아 있음" 판정은 `hasLiveSubscription()`(`lib/polar/subscription.ts`) 하나로 통일합니다** —
+  `polar_subscription_id`가 있고 `status !== 'revoked'`. `past_due`도 살아 있는 것으로 봅니다.
+  - `/api/checkout`: 살아 있으면 체크아웃을 거절합니다. `past_due`를 예외로 두면 같은 사용자에게
+    Polar 구독이 두 개 생겨 이중 청구되고, 로컬 행은 `user_id` 기준 upsert라 첫 구독을 추적하지
+    못하게 됩니다(이후 첫 구독의 `revoked`가 결제 중인 사용자를 free로 내림).
+  - `/api/subscription/cancel`·`/change`: 살아 있으면 허용합니다. 결제가 실패한 사용자야말로
+    해지하거나 더 싼 플랜으로 내려갈 수 있어야 합니다.
+- 재구독(이전 구독이 `revoked`) 시 체크아웃은 저장된 `polar_customer_id`를 `customerId`로 재사용합니다
+  — 이메일로만 넘기면 같은 사용자에게 Polar 고객이 중복 생성되어 결제수단·인보이스 이력이 갈라집니다.
+- 상태 변경 웹훅(`past_due`/`revoked`)은 `applyStatusPatch()`로 처리하며 **갱신된 행 수를 확인합니다**.
+  Supabase의 `update`는 0행을 매칭해도 에러가 아니므로, 확인하지 않으면 해지 이벤트가 200으로
+  삼켜져 해지된 사용자가 유료 플랜에 남습니다. 0행일 때는 두 경우를 구분합니다:
+  같은 `polar_customer_id`의 행이 이미 다른(최신) 구독을 가리키면 **과거 이벤트이므로 skip**,
+  아무 행도 없으면 생성 이벤트가 아직 도착하지 않은 순서 문제이므로 **500으로 재전송을 요청**합니다.
+- 구독 upsert가 외래키 위반(`23503`)으로 실패하면(탈퇴한 사용자의 `metadata.userId`) 재시도해도
+  성공할 수 없으므로 실패가 아니라 skip으로 처리합니다.
 
 ## 11. 인증 / 라우트 보호
 

@@ -102,40 +102,75 @@ async function syncActiveSubscription(
   );
 
   if (error) {
+    // Foreign-key violation: the metadata userId points at a user that no longer
+    // exists (deleted account). Redelivering can never make that row insertable,
+    // so skip instead of asking Polar to retry forever.
+    if (error.code === "23503") {
+      console.error("Polar webhook: subscription references an unknown user, skipping", {
+        subscriptionId: subscription.id,
+        userId,
+      });
+      return true;
+    }
     console.error("Failed to sync subscription", error);
     return false;
   }
   return true;
 }
 
-async function markPastDue(supabase: ServiceClient, subscriptionId: string): Promise<boolean> {
-  const { error } = await supabase
+/**
+ * Applies a status patch to the row that holds `subscription.id`.
+ *
+ * A Supabase `update` matching zero rows is not an error, so an unmatched revoke
+ * would otherwise be answered with 200 and lost for good - leaving a canceled
+ * user on a paid plan. There are two ways to match nothing, and they need
+ * opposite answers:
+ *   - the row for this subscription has not been written yet (Polar can deliver
+ *     events out of order) - a redelivery fixes it, so report failure;
+ *   - the customer has since moved to a newer subscription and this event is
+ *     about the old one - no retry can ever match, so skip it.
+ */
+async function applyStatusPatch(
+  supabase: ServiceClient,
+  subscription: { id: string; customerId: string },
+  patch: Database["public"]["Tables"]["subscriptions"]["Update"],
+  label: string
+): Promise<boolean> {
+  const { data, error } = await supabase
     .from("subscriptions")
-    .update({ status: "past_due", updated_at: new Date().toISOString() })
-    .eq("polar_subscription_id", subscriptionId);
-  if (error) {
-    console.error("Failed to mark subscription past_due", error);
-    return false;
-  }
-  return true;
-}
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("polar_subscription_id", subscription.id)
+    .select("user_id");
 
-async function markRevoked(supabase: ServiceClient, subscriptionId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from("subscriptions")
-    .update({
-      plan: "free",
-      status: "revoked",
-      cancel_at_period_end: false,
-      current_period_end: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("polar_subscription_id", subscriptionId);
   if (error) {
-    console.error("Failed to mark subscription revoked", error);
+    console.error(`Failed to mark subscription ${label}`, error);
     return false;
   }
-  return true;
+  if (data.length > 0) return true;
+
+  const { data: superseded, error: lookupError } = await supabase
+    .from("subscriptions")
+    .select("polar_subscription_id")
+    .eq("polar_customer_id", subscription.customerId)
+    .limit(1);
+
+  if (lookupError) {
+    console.error("Failed to look up superseded subscription", lookupError);
+    return false;
+  }
+
+  if (superseded.length > 0) {
+    console.error(`Polar webhook: ${label} event targets a superseded subscription, skipping`, {
+      eventSubscriptionId: subscription.id,
+      currentSubscriptionId: superseded[0].polar_subscription_id,
+    });
+    return true;
+  }
+
+  console.error(`Polar webhook: no local row for ${label} event, asking for redelivery`, {
+    subscriptionId: subscription.id,
+  });
+  return false;
 }
 
 export async function POST(request: Request) {
@@ -190,10 +225,20 @@ export async function POST(request: Request) {
         handled = await syncActiveSubscription(supabase, event.data);
         break;
       case "subscription.past_due":
-        handled = await markPastDue(supabase, event.data.id);
+        handled = await applyStatusPatch(supabase, event.data, { status: "past_due" }, "past_due");
         break;
       case "subscription.revoked":
-        handled = await markRevoked(supabase, event.data.id);
+        handled = await applyStatusPatch(
+          supabase,
+          event.data,
+          {
+            plan: "free",
+            status: "revoked",
+            cancel_at_period_end: false,
+            current_period_end: null,
+          },
+          "revoked"
+        );
         break;
       default:
         handled = true;

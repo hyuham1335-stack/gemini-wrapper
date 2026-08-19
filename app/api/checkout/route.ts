@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/supabase/require-user";
 import { errorResponse, readJsonBody, unauthorizedResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
 import { PLAN_PRODUCT_IDS } from "@/lib/polar/plans";
-import { getUserSubscription } from "@/lib/polar/subscription";
+import { getUserSubscription, hasLiveSubscription } from "@/lib/polar/subscription";
 
 interface CheckoutRequestBody {
   plan?: string;
@@ -30,8 +30,12 @@ export async function POST(request: Request) {
   }
 
   const subscription = await getUserSubscription(supabase, user.id);
-  if (subscription.polarSubscriptionId && subscription.status === "active") {
-    return errorResponse("이미 활성 구독이 있습니다. 플랜 변경을 이용해주세요.", 400);
+  if (hasLiveSubscription(subscription)) {
+    // past_due included on purpose - a second checkout would bill the user twice
+    // and the local row (keyed by user_id) would stop tracking the first one.
+    return subscription.status === "past_due"
+      ? errorResponse("결제에 실패한 구독이 있습니다. 결제 수단을 먼저 업데이트해주세요.", 400)
+      : errorResponse("이미 활성 구독이 있습니다. 플랜 변경을 이용해주세요.", 400);
   }
 
   const origin = new URL(request.url).origin;
@@ -40,7 +44,12 @@ export async function POST(request: Request) {
     const checkout = await polar.checkouts.create({
       products: [productId],
       successUrl: `${origin}/pricing/success?checkout_id={CHECKOUT_ID}`,
-      customerEmail: user.email,
+      // A returning subscriber (previous subscription revoked) already has a Polar
+      // customer - reuse it so payment methods and invoice history stay on one
+      // customer instead of creating a duplicate keyed only by email.
+      ...(subscription.polarCustomerId
+        ? { customerId: subscription.polarCustomerId }
+        : { customerEmail: user.email }),
       metadata: { userId: user.id },
     });
 

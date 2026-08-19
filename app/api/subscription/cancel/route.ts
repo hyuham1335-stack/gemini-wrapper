@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/supabase/require-user";
 import { errorResponse, readJsonBody, unauthorizedResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
-import { getUserSubscription } from "@/lib/polar/subscription";
+import { getUserSubscription, hasLiveSubscription } from "@/lib/polar/subscription";
 
 interface CancelRequestBody {
   resume?: boolean;
@@ -15,8 +15,10 @@ export async function POST(request: Request) {
   const body = (await readJsonBody<CancelRequestBody>(request)) ?? {};
 
   const subscription = await getUserSubscription(supabase, user.id);
-  if (!subscription.polarSubscriptionId || subscription.status !== "active") {
-    return errorResponse("활성 구독이 없습니다.", 400);
+  // past_due is included: a user whose payment failed must still be able to cancel
+  // (and to undo that cancellation once the payment method is fixed).
+  if (!hasLiveSubscription(subscription)) {
+    return errorResponse("해지할 구독이 없습니다.", 400);
   }
 
   try {

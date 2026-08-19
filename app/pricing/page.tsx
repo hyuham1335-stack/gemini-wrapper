@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getUserSubscription } from "@/lib/polar/subscription";
+import { getUserSubscription, hasLiveSubscription } from "@/lib/polar/subscription";
 import { PricingPlans } from "@/components/pricing/pricing-plans";
 import { BackToDashboardLink } from "@/components/back-to-dashboard-link";
 
@@ -28,9 +28,7 @@ export default async function PricingPage() {
 
       <PricingPlans
         currentPlan={subscription?.plan ?? "free"}
-        hasActiveSubscription={Boolean(
-          subscription?.polarSubscriptionId && subscription.status === "active"
-        )}
+        hasActiveSubscription={Boolean(subscription && hasLiveSubscription(subscription))}
         isLoggedIn={Boolean(user)}
       />
     </section>

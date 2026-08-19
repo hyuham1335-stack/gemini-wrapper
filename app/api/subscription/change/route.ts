@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/supabase/require-user";
 import { errorResponse, readJsonBody, unauthorizedResponse } from "@/lib/api/error-response";
 import { polar } from "@/lib/polar/client";
 import { PLAN_PRODUCT_IDS } from "@/lib/polar/plans";
-import { getUserSubscription } from "@/lib/polar/subscription";
+import { getUserSubscription, hasLiveSubscription } from "@/lib/polar/subscription";
 
 interface ChangeRequestBody {
   plan?: string;
@@ -21,8 +21,8 @@ export async function PATCH(request: Request) {
   }
 
   const subscription = await getUserSubscription(supabase, user.id);
-  if (!subscription.polarSubscriptionId || subscription.status !== "active") {
-    return errorResponse("활성 구독이 없습니다. 결제를 먼저 진행해주세요.", 400);
+  if (!hasLiveSubscription(subscription)) {
+    return errorResponse("변경할 구독이 없습니다. 결제를 먼저 진행해주세요.", 400);
   }
 
   if (subscription.plan === targetPlan) {

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { getUserSubscription, hasLiveSubscription } from "@/lib/polar/subscription";
+import { getUserSubscription } from "@/lib/polar/subscription";
 import { PricingPlans } from "@/components/pricing/pricing-plans";
-import { BackToDashboardLink } from "@/components/back-to-dashboard-link";
+import { CornerBackLink } from "@/components/corner-back-link";
 
 export default async function PricingPage() {
   const supabase = await createClient();
@@ -13,7 +13,11 @@ export default async function PricingPage() {
 
   return (
     <section className="relative flex flex-1 flex-col items-center gap-12 px-4 py-24">
-      {user && <BackToDashboardLink />}
+      {user ? (
+        <CornerBackLink href="/dashboard" label="대시보드" />
+      ) : (
+        <CornerBackLink href="/" label="홈" />
+      )}
       <div className="flex flex-col items-center gap-4 text-center">
         <span className="text-sm font-medium tracking-wide text-neutral-500 uppercase">
           요금제
@@ -26,11 +30,7 @@ export default async function PricingPage() {
         </p>
       </div>
 
-      <PricingPlans
-        currentPlan={subscription?.plan ?? "free"}
-        hasActiveSubscription={Boolean(subscription && hasLiveSubscription(subscription))}
-        isLoggedIn={Boolean(user)}
-      />
+      <PricingPlans subscription={subscription} />
     </section>
   );
 }

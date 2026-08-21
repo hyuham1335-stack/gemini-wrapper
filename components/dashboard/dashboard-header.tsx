@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { USAGE_WARNING_RATIO, usageRatio } from "@/lib/usage";
 
 interface DashboardHeaderProps {
   userLabel: string;
@@ -15,6 +16,8 @@ export function DashboardHeader({
   onSignOut,
   onOpenSearch,
 }: DashboardHeaderProps) {
+  const isWarning = limit !== null && usageRatio(used, limit) >= USAGE_WARNING_RATIO;
+
   return (
     <header className="flex shrink-0 items-center justify-between gap-4 border-b border-neutral-800 bg-neutral-950 px-6 py-3">
       <span className="text-sm font-medium tracking-wide text-neutral-500 uppercase">
@@ -58,9 +61,19 @@ export function DashboardHeader({
         >
           청구 설정
         </Link>
-        <span className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-medium text-neutral-300">
+        {/* Doubles as the billing entry point on small screens, where the
+            text links above are hidden. */}
+        <Link
+          href="/billing"
+          aria-label="이번 달 사용량 · 청구 설정"
+          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+            isWarning
+              ? "border-amber-500/50 text-amber-400 hover:border-amber-400"
+              : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
+          }`}
+        >
           {limit === null ? "무제한" : `${used.toLocaleString()} / ${limit.toLocaleString()} 사용`}
-        </span>
+        </Link>
         <span className="hidden text-sm text-neutral-400 sm:inline">{userLabel}</span>
         <button
           type="button"

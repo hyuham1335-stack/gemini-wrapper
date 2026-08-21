@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const protectedRoutes = ["/dashboard", "/billing"];
+// `/pricing/success` polls `/api/subscription` for the webhook to land, so a
+// signed-out visitor would only ever see the "confirmation is delayed" state.
+const protectedRoutes = ["/dashboard", "/billing", "/pricing/success"];
 const authRoutes = ["/login"];
 
 export async function updateSession(request: NextRequest) {

@@ -8,9 +8,12 @@ import { ConversationSidebar } from "@/components/dashboard/conversation-sidebar
 import { ChatPanel } from "@/components/dashboard/chat-panel";
 import { UsageBanner } from "@/components/dashboard/usage-banner";
 import { CancellationBanner } from "@/components/dashboard/cancellation-banner";
+import { PastDueBanner } from "@/components/dashboard/past-due-banner";
 import { PaywallModal } from "@/components/dashboard/paywall-modal";
 import { SearchModal } from "@/components/dashboard/search-modal";
 import type { ChatMessage, Conversation } from "@/components/dashboard/types";
+import type { Plan } from "@/lib/polar/plans";
+import type { UserSubscription } from "@/lib/polar/subscription";
 
 export default function DashboardPage() {
   const { user, isLoading, signOut } = useAuth();
@@ -20,18 +23,23 @@ export default function DashboardPage() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [usageUsed, setUsageUsed] = useState(0);
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
+  const [plan, setPlan] = useState<Plan>("free");
   const [isStreaming, setIsStreaming] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] =
+    useState<UserSubscription["status"]>("active");
 
   const activeConversation =
     conversations.find((conversation) => conversation.id === activeConversationId) ?? null;
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.replace("/login");
+      // Keep the destination so the user lands back here after signing in,
+      // matching what proxy.ts does for a server-side visit.
+      router.replace("/login?redirectedFrom=/dashboard");
     }
   }, [isLoading, user, router]);
 
@@ -83,6 +91,7 @@ export default function DashboardPage() {
       const data = await response.json();
       setUsageUsed(data.used ?? 0);
       setUsageLimit(data.limit ?? null);
+      setPlan(data.plan ?? "free");
     } catch (error) {
       console.error("Failed to load usage", error);
     }
@@ -96,6 +105,7 @@ export default function DashboardPage() {
       const data = await response.json();
       setCancelAtPeriodEnd(data.subscription?.cancelAtPeriodEnd ?? false);
       setCurrentPeriodEnd(data.subscription?.currentPeriodEnd ?? null);
+      setSubscriptionStatus(data.subscription?.status ?? "active");
     } catch (error) {
       console.error("Failed to load subscription", error);
     }
@@ -313,6 +323,7 @@ export default function DashboardPage() {
         onSignOut={handleSignOut}
         onOpenSearch={() => setShowSearch(true)}
       />
+      <PastDueBanner status={subscriptionStatus} />
       <CancellationBanner
         cancelAtPeriodEnd={cancelAtPeriodEnd}
         currentPeriodEnd={currentPeriodEnd}
@@ -332,7 +343,9 @@ export default function DashboardPage() {
           disabled={isStreaming}
         />
       </div>
-      {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
+      {showPaywall && (
+        <PaywallModal plan={plan} limit={usageLimit} onClose={() => setShowPaywall(false)} />
+      )}
       {showSearch && (
         <SearchModal
           onClose={() => setShowSearch(false)}

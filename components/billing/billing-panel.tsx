@@ -53,8 +53,16 @@ export function BillingPanel({ subscription: initial, usage }: BillingPanelProps
   const [notice, setNotice] = useState<string | null>(null);
 
   const paid = isPaidPlan(subscription.plan);
+  // A former subscriber keeps their Polar customer record, so invoices and
+  // payment methods stay reachable even after the plan drops back to Free.
+  const hasPolarCustomer = Boolean(subscription.polarCustomerId);
 
   async function handleCancelToggle(resume: boolean) {
+    // Cancelling drops the user to Free at period end - make it deliberate.
+    if (!resume && !window.confirm("구독을 해지할까요? 현재 결제 기간이 끝나면 Free로 전환됩니다.")) {
+      return;
+    }
+
     setIsPending(true);
     setError(null);
     setNotice(null);
@@ -120,19 +128,20 @@ export function BillingPanel({ subscription: initial, usage }: BillingPanelProps
 
       {subscription.status === "past_due" && (
         <p className="rounded-md bg-red-500/10 px-4 py-2 text-sm text-red-400">
-          결제에 실패했습니다. 결제 수단을 확인해주세요.
+          결제에 실패했습니다. 아래 &lsquo;결제 수단 관리&rsquo;에서 결제 수단을 업데이트해주세요.
+          새로 결제하지 않아도 결제가 성공하면 플랜이 그대로 유지됩니다.
         </p>
       )}
 
       <div className="flex flex-col gap-3">
-        {paid && (
+        {hasPolarCustomer && (
           <button
             type="button"
             onClick={handlePortal}
             disabled={isPending}
             className="rounded-full border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            결제 수단 관리
+            {paid ? "결제 수단 관리" : "결제 내역 보기"}
           </button>
         )}
 

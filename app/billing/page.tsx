@@ -4,7 +4,7 @@ import { getUserSubscription } from "@/lib/polar/subscription";
 import { getUsedCount } from "@/lib/usage";
 import { PLAN_LIMITS } from "@/lib/polar/plans";
 import { BillingPanel } from "@/components/billing/billing-panel";
-import { BackToDashboardLink } from "@/components/back-to-dashboard-link";
+import { CornerBackLink } from "@/components/corner-back-link";
 
 export default async function BillingPage() {
   const supabase = await createClient();
@@ -26,7 +26,7 @@ export default async function BillingPage() {
 
   return (
     <section className="relative flex flex-1 flex-col items-center gap-8 px-4 py-24">
-      <BackToDashboardLink />
+      <CornerBackLink href="/dashboard" label="대시보드" />
       <div className="flex flex-col items-center gap-4 text-center">
         <span className="text-sm font-medium tracking-wide text-neutral-500 uppercase">
           청구 설정

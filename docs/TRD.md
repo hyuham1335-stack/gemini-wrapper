@@ -2,8 +2,8 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 문서 버전 | 0.2 |
-| 최종 수정 | 2026-08-14 |
+| 문서 버전 | 0.3 |
+| 최종 수정 | 2026-08-21 |
 | 대상 | 이 저장소에서 작업하는 개발자 / 코딩 에이전트 |
 | 관련 문서 | [PRD.md](./PRD.md), [../README.md](../README.md), [../CLAUDE.md](../CLAUDE.md) |
 
@@ -68,9 +68,10 @@ app/
     subscription/cancel/route.ts 해지 예약/재개
     webhooks/polar/route.ts      Polar 웹훅
 components/
-  hero-section.tsx, back-to-dashboard-link.tsx
+  hero-section.tsx, corner-back-link.tsx
   dashboard/  chat-panel, conversation-sidebar, dashboard-header,
-              search-modal, paywall-modal, usage-banner, cancellation-banner, types
+              search-modal, paywall-modal, usage-banner, cancellation-banner,
+              past-due-banner, types
   billing/billing-panel.tsx
   pricing/pricing-plans.tsx
 contexts/auth-context.tsx        전역 Supabase 인증 상태
@@ -287,7 +288,9 @@ Gemini 호출 실패, 스트림 중단, **클라이언트 연결 종료**(`Reada
 
 - `proxy.ts`가 정적 자산을 제외한 모든 경로에 매칭되어 `updateSession()`을 실행합니다.
 - 세션 쿠키 갱신은 여기서만 가능합니다(서버 컴포넌트는 쿠키를 쓸 수 없음).
-- 보호 라우트: `/dashboard`, `/billing` → 비로그인 시 `/login?redirectedFrom=...`.
+- 보호 라우트: `/dashboard`, `/billing`, `/pricing/success` → 비로그인 시 `/login?redirectedFrom=...`.
+  `/pricing/success`는 웹훅 반영을 기다리며 `/api/subscription`을 폴링하므로, 비로그인 상태로 열면
+  401만 반복하다 "확인 지연" 문구로 끝납니다 — 그래서 보호 대상입니다.
 - 인증 라우트: `/login` → 로그인 상태면 `/dashboard`.
 - `app/auth/callback/route.ts`가 `exchangeCodeForSession` 후 프로필을 암호화 동기화하고,
   `safeRedirectPath()`를 통과한 경로로만 되돌려 보냅니다: `/`로 시작해야 하며 `//`·`/\`로 시작하는

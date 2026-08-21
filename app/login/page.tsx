@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
+import { CornerBackLink } from "@/components/corner-back-link";
 
 function GoogleIcon() {
   return (
@@ -45,7 +46,8 @@ function LoginForm() {
   }
 
   return (
-    <section className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
+    <section className="relative flex flex-1 flex-col items-center justify-center gap-6 px-4 py-24 text-center">
+      <CornerBackLink href="/" label="홈" />
       <span className="text-sm font-medium tracking-wide text-neutral-500 uppercase">
         Gemini Wrapper
       </span>

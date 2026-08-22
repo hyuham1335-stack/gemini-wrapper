@@ -133,6 +133,35 @@ npm run dev
 2. Google OAuth 승인된 Redirect URI가 정확한지, 게시 상태가 Production인지
 3. Vercel에 등록된 환경 변수가 최신 값인지
 
+## 10. 프로젝트 문서 (PRD / TRD)
+
+제품·기술 사양은 `docs/` 아래 두 문서로 관리합니다. 기능을 추가·변경하기 전에 해당 문서를 먼저 확인하세요.
+
+| 문서 | 내용 | 언제 읽나 |
+| --- | --- | --- |
+| [`docs/PRD.md`](docs/PRD.md) | **제품 요구사항** — 타깃 사용자, 핵심 시나리오, 기능 요구사항 ID(A-/C-/U-/B-), 플랜 정책, 비기능 요구사항, 범위 외 항목 | 사용자에게 보이는 동작을 추가·변경·삭제하기 전 (요구된 동작이 맞는지 확인) |
+| [`docs/TRD.md`](docs/TRD.md) | **기술 요구사항** — 시스템 구성, 데이터 모델, API 명세, 사용량 예약/해제 설계, 채팅 스트리밍 흐름, 암호화·결제·웹훅 설계, 코딩 규약, 기술 부채 | 코드를 건드리기 전 (구현 계약 확인) |
+
+**문서 동기화 규칙**
+
+- 사용자에게 보이는 동작을 바꾸면 `docs/PRD.md`의 해당 요구사항 표를 같은 커밋에서 갱신합니다.
+- API·스키마·플랜 한도·보안 설계를 바꾸면 `docs/TRD.md`의 해당 절을 같은 커밋에서 갱신합니다.
+- 아직 구현되지 않은 항목을 PRD에 "구현됨"으로 표시하지 않습니다.
+
+AI 에이전트(Claude Code)용 작업 규칙은 [`CLAUDE.md`](CLAUDE.md)와 [`AGENTS.md`](AGENTS.md)에 있습니다.
+
+## 11. 슬래시 명령어 (Claude Code)
+
+이 저장소에는 반복 작업을 자동화하는 프로젝트 전용 슬래시 명령어가 `.claude/commands/` 아래에 정의되어 있습니다. Claude Code 세션에서 `/명령어` 형태로 실행합니다.
+
+| 명령어 | 정의 파일 | 하는 일 |
+| --- | --- | --- |
+| `/ship [메모]` | [`.claude/commands/ship.md`](.claude/commands/ship.md) | 변경 사항 확인(`git status`/`git diff`) → `npm run lint` → `npm run build` → 관련 파일만 스테이징 → 영어 커밋 메시지 작성 → 현재 브랜치를 `origin`에 푸쉬. 시크릿 파일(`.env*`, `*.pem` 등)이 보이면 커밋하지 않고 중단하며, 검증이 3회 실패하면 커밋 없이 실패 내용을 보고합니다. `--no-verify`·force push는 사용하지 않습니다. |
+
+"배포해줘" / "ship it" 처럼 말해도 `/ship`과 같은 흐름으로 처리됩니다 (`CLAUDE.md`의 워크플로 트리거 참고).
+
+**새 명령어 추가하기**: `.claude/commands/<이름>.md` 파일을 만들면 `/<이름>`으로 바로 사용할 수 있습니다. 파일 상단 frontmatter에 `description`(명령어 설명), `argument-hint`(인자 힌트), `allowed-tools`(허용 도구)를 적고, 본문에 수행할 단계를 서술합니다. 본문의 `$ARGUMENTS`는 호출 시 넘긴 인자로 치환됩니다.
+
 ## 참고 문서
 
 - [Gemini API 공식 문서](https://ai.google.dev/gemini-api/docs?hl=ko)
